@@ -1,17 +1,34 @@
+/* --- ESTILO GERAL --- */
 body {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     height: 100vh;
     width: 100vw;
-    overflow: hidden; /* Impede scroll */
+    overflow: hidden;
     background-color: #f0f0f0;
+}
+
+#app {
+    height: 100%;
+    width: 100%;
+    position: relative;
+}
+
+/* --- TELA DO MAPA --- */
+#map-screen {
+    height: 100%;
+    width: 100%;
+    display: block; /* Visível por padrão */
 }
 
 #map {
     height: 100%;
     width: 100%;
     z-index: 1;
+    position: absolute;
+    top: 0;
+    left: 0;
 }
 
 /* Elementos flutuantes sobre o mapa */
@@ -21,18 +38,15 @@ body {
     left: 20px;
     right: 20px;
     z-index: 1000;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     padding: 15px;
     border-radius: 12px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     backdrop-filter: blur(5px);
+    text-align: center;
 }
 
-h1 {
-    margin: 0 0 5px 0;
-    font-size: 1.2rem;
-    color: #333;
-}
+h1 { margin: 0 0 5px 0; font-size: 1.2rem; color: #333; }
 
 .status-box {
     font-size: 0.9rem;
@@ -40,15 +54,15 @@ h1 {
     color: #666;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
 }
-
-.status-box.active { color: #2ecc71; } /* Verde */
-.status-box.error { color: #e74c3c; }  /* Vermelho */
+.status-box.active { color: #2ecc71; }
+.status-box.error { color: #e74c3c; }
 
 .controls-overlay {
     position: absolute;
-    bottom: 30px;
+    bottom: 90px; /* Subiu para não ficar atrás do menu */
     left: 20px;
     right: 20px;
     z-index: 1000;
@@ -59,7 +73,7 @@ h1 {
     padding: 18px;
     border: none;
     border-radius: 12px;
-    background-color: #000; /* Preto Shabba? */
+    background-color: #000;
     color: white;
     font-size: 1.1rem;
     font-weight: bold;
@@ -67,12 +81,79 @@ h1 {
     cursor: pointer;
     transition: transform 0.1s;
 }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { background-color: #999; cursor: not-allowed; }
 
-.btn-primary:active {
-    transform: scale(0.98);
+/* --- MENU INFERIOR (ABAS) --- */
+.bottom-nav {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 70px;
+    background: white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    z-index: 2000;
 }
 
-.btn-primary:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
+.nav-item {
+    text-align: center;
+    color: #999;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 10px;
+    flex-grow: 1;
+}
+
+.nav-item.active { color: #000; font-weight: bold; }
+.nav-icon { font-size: 1.5rem; display: block; margin-bottom: 2px; }
+
+/* --- TELA DE RELATÓRIOS --- */
+#report-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100% - 70px);
+    background: #f5f5f5;
+    z-index: 1500;
+    display: none; /* Invisível por padrão */
+    overflow-y: auto;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+#report-screen.visible { display: block; }
+
+.report-card {
+    background: white;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.report-time { color: #666; font-size: 0.9rem; margin-bottom: 5px; }
+
+.share-btn {
+    background-color: #25D366;
+    color: white;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 8px;
+    margin-top: 10px;
+    font-weight: bold;
+    cursor: pointer;
 }
