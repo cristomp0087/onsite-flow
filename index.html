@@ -5,12 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>OnSite Flow</title>
     
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📍</text></svg>">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <link rel="stylesheet" href="style.css">
-    
-    <link rel="manifest" href="manifest.json">
 </head>
 <body>
 
@@ -20,9 +17,7 @@
                 <h1>OnSite Flow</h1>
                 <div id="status-indicator" class="status-box waiting">Aguardando GPS...</div>
             </div>
-            
             <div id="map"></div>
-            
             <div class="controls-overlay">
                 <button id="action-btn" class="btn-primary" disabled>Localizando...</button>
             </div>
@@ -30,26 +25,22 @@
 
         <div id="report-screen">
             <h2 style="margin-top:0;">Meus Relatórios</h2>
-            <p style="color: #666; font-size: 0.9em; margin-bottom: 20px;">Histórico de atividades.</p>
             <div id="report-list"></div>
         </div>
 
         <div class="bottom-nav">
-            <div class="nav-item active" onclick="switchTab('map')">
-                <span class="nav-icon">🗺️</span>
-                Mapa
+            <div class="nav-item active" id="tab-map">
+                <span class="nav-icon">🗺️</span> Mapa
             </div>
-            <div class="nav-item" onclick="switchTab('report')">
-                <span class="nav-icon">📄</span>
-                Relatórios
+            <div class="nav-item" id="tab-report">
+                <span class="nav-icon">📄</span> Relatórios
             </div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
+
     <script type="module" src="src/app.js"></script>
 
 </body>
