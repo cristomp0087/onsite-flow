@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>OnSite Flow — Admin</title>
+
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+
+<body>
+  <div class="admin-shell" style="height:100dvh; display:grid; grid-template-columns: 420px 1fr; gap:0;">
+
+    <!-- Left panel -->
+    <aside class="admin-panel" style="padding:16px; overflow:auto; border-right:1px solid rgba(0,0,0,0.08); background:#fff;">
+      <h1 style="margin:0 0 6px; font-size:18px; font-weight:900;">OnSite Flow — Admin</h1>
+      <p style="margin:0 0 14px; color:#64748b; font-weight:700; font-size:13px;">
+        Gestão de obras e registros. (Desktop)
+      </p>
+
+      <section class="card" style="padding:14px; margin-bottom:14px;">
+        <h2 style="margin:0 0 10px; font-size:14px; font-weight:950;">Cadastrar obra</h2>
+
+        <label style="display:block; font-size:12px; font-weight:900; color:#475569;">Nome</label>
+        <input id="admin-site-name" type="text" placeholder="Ex: Edifício A"
+               style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); margin:6px 0 10px; font-weight:800;" />
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div>
+            <label style="display:block; font-size:12px; font-weight:900; color:#475569;">Raio (m)</label>
+            <input id="admin-site-radius" type="number" value="100" min="10" max="2000"
+                   style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); margin:6px 0 10px; font-weight:800;" />
+          </div>
+          <div>
+            <label style="display:block; font-size:12px; font-weight:900; color:#475569;">Coord.</label>
+            <div id="admin-site-coords" style="padding:10px 12px; border-radius:12px; border:1px dashed rgba(0,0,0,0.18); margin:6px 0 10px; font-weight:900; color:#64748b;">
+              clique no mapa…
+            </div>
+          </div>
+        </div>
+
+        <button id="admin-save-site" class="btn btn-primary btn-wide" disabled>Salvar local</button>
+        <button id="admin-refresh-sites" class="btn btn-ghost btn-wide" style="margin-top:10px;">Recarregar locais</button>
+
+        <p style="margin:10px 0 0; color:#64748b; font-size:12px; font-weight:700;">
+          Dica: clique no mapa para escolher a posição.
+        </p>
+      </section>
+
+      <section class="card" style="padding:14px;">
+        <h2 style="margin:0 0 10px; font-size:14px; font-weight:950;">Registros</h2>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
+          <input id="admin-filter-user" placeholder="filtrar usuário (id ou nome)" 
+                 style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); font-weight:800;" />
+          <input id="admin-filter-site" placeholder="filtrar obra" 
+                 style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); font-weight:800;" />
+        </div>
+
+        <button id="admin-refresh-records" class="btn btn-ghost btn-wide">Recarregar registros</button>
+
+        <div id="admin-kpis" style="margin-top:12px; color:#0f172a; font-weight:900; font-size:13px;">
+          —
+        </div>
+      </section>
+    </aside>
+
+    <!-- Right: Map + table -->
+    <main style="position:relative; height:100dvh; overflow:hidden;">
+      <div id="admin-map" style="height:55%; width:100%;"></div>
+
+      <div style="height:45%; overflow:auto; background:#fff; border-top:1px solid rgba(0,0,0,0.08);">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead style="position:sticky; top:0; background:#fff; z-index:5;">
+            <tr style="border-bottom:1px solid rgba(0,0,0,0.08); text-align:left;">
+              <th style="padding:12px;">Usuário</th>
+              <th style="padding:12px;">Obra</th>
+              <th style="padding:12px;">Entrada</th>
+              <th style="padding:12px;">Saída</th>
+              <th style="padding:12px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="admin-records-body"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Admin App -->
+  <script type="module" src="./src/adminApp.js"></script>
+</body>
+</html>

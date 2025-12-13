@@ -2,17 +2,16 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <title>OnSite Flow</title>
 
-  <meta name="theme-color" content="#ff6a00" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📍</text></svg>">
 
-  <!-- Leaflet (CSS obrigatório pro mapa) -->
+  <!-- Leaflet CSS (obrigatório) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
   <!-- Seu CSS -->
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
 </head>
 
 <body>
@@ -20,18 +19,13 @@
 
     <!-- DASHBOARD -->
     <main id="dashboard-screen" class="tab-screen active" aria-label="Início">
-      <section class="card card-status" aria-label="Status">
-        <div id="gps-status-bar" class="gps-bar" role="status" aria-live="polite">
-          📡 Buscando Satélites...
-        </div>
+      <section class="card card-status">
+        <div id="gps-status-bar" class="gps-bar" role="status" aria-live="polite">📡 Buscando Satélites...</div>
 
         <div class="status-content">
           <p class="status-title" id="status-label">Status Atual</p>
           <div class="status-time" id="status-timer">--:--</div>
-          <div class="status-location" id="status-loc">
-            <span class="dot dot-idle" aria-hidden="true"></span>
-            <span>Não trabalhando</span>
-          </div>
+          <div class="status-location" id="status-loc"><span>⚪</span> Não trabalhando</div>
         </div>
       </section>
 
@@ -62,17 +56,14 @@
       </section>
     </main>
 
-    <!-- MAPA -->
+    <!-- MAPA (ABA) -->
     <main id="map-screen" class="tab-screen" aria-label="Locais">
       <div class="map-overlay">
         <div class="map-overlay-head">
           <h2 class="map-title">Gerenciar Locais</h2>
           <p class="map-subtitle">Cadastre obras e pontos de interesse direto do mapa.</p>
         </div>
-
-        <button id="btn-create-site" class="btn btn-primary btn-wide">
-          ➕ Adicionar Obra Aqui
-        </button>
+        <button id="btn-create-site" class="btn btn-primary btn-wide">➕ Adicionar Obra Aqui</button>
       </div>
 
       <div id="map" class="map" aria-label="Mapa"></div>
@@ -82,14 +73,11 @@
     <div id="geofence-alert" class="geo-alert" role="dialog" aria-modal="true" aria-label="Chegada detectada">
       <div class="geo-alert-body">
         <h3 class="geo-title">📍 Você chegou!</h3>
-        <p id="geo-msg" class="geo-msg">Detectamos entrada em Obra A</p>
-
+        <p id="geo-msg" class="geo-msg">Detectamos entrada em Obra</p>
         <div class="geo-actions">
           <button id="btn-geo-visit" class="btn btn-ghost">Visita</button>
           <button id="btn-geo-work" class="btn btn-success">Trabalhar</button>
         </div>
-
-        <button class="geo-close" type="button" aria-label="Fechar" onclick="document.getElementById('geofence-alert').style.display='none'">✕</button>
       </div>
     </div>
 
@@ -105,6 +93,7 @@
         <span class="nav-label">Locais</span>
       </button>
     </nav>
+
   </div>
 
   <!-- Libs -->
@@ -112,7 +101,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- Seu app -->
+  <!-- App -->
   <script type="module" src="./src/app.js"></script>
 </body>
 </html>
