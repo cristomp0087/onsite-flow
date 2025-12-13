@@ -1,104 +1,118 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>OnSite Flow</title>
-    
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📍</text></svg>">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <style>
-        body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; height: 100dvh; width: 100vw; overflow: hidden; background: #f0f0f0; }
-        #app { height: 100%; width: 100%; position: relative; }
-        #map-screen { height: 100%; width: 100%; display: block; }
-        #map { height: 100%; width: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
-        
-        /* HEADER (Com botão de criar obra) */
-        .header-overlay { position: absolute; top: env(safe-area-inset-top, 20px); left: 20px; right: 20px; z-index: 1000; background: rgba(255,255,255,0.95); padding: 10px 15px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); backdrop-filter: blur(5px); }
-        .header-info { text-align: left; }
-        h1 { margin: 0; font-size: 1.1rem; color: #333; }
-        .status-box { font-size: 0.8rem; color: #666; font-weight: 600; }
-        .status-box.active { color: #2ecc71; }
-        
-        /* Botão Pequeno de Criar (Gestor) */
-        .btn-create { background: #eee; border: none; padding: 8px 12px; border-radius: 8px; font-size: 1.2rem; cursor: pointer; }
-        
-        /* Notificação de Geofence (Flutuante) */
-        #geofence-alert { position: absolute; top: 100px; left: 20px; right: 20px; background: #333; color: white; padding: 15px; border-radius: 10px; z-index: 2000; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.3); text-align: center; }
-        #geofence-alert h3 { margin: 0 0 5px 0; color: #ffeb3b; }
-        
-        /* Controles Inferiores */
-        .controls-overlay { position: absolute; bottom: 100px; left: 20px; right: 20px; z-index: 1000; }
-        .btn-primary { width: 100%; padding: 18px; border: none; border-radius: 12px; background: #000; color: white; font-size: 1.1rem; font-weight: bold; box-shadow: 0 4px 15px rgba(0,0,0,0.2); cursor: pointer; transition: 0.2s; }
-        .btn-primary.working { background: #e74c3c; animation: pulse 2s infinite; }
-        
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>OnSite Flow</title>
 
-        /* Telas de Relatório e Abas (Igual ao anterior) */
-        #report-screen { height: calc(100% - 80px); width: 100%; position: absolute; top: 0; left: 0; background: #f5f5f5; z-index: 1500; display: none; padding: 20px; padding-bottom: 100px; box-sizing: border-box; overflow-y: auto; }
-        #report-screen.visible { display: block; }
-        .bottom-nav { position: absolute; bottom: 0; left: 0; width: 100%; height: 70px; background: white; display: flex; justify-content: space-around; align-items: center; z-index: 2000; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); padding-bottom: env(safe-area-inset-bottom); height: calc(70px + env(safe-area-inset-bottom)); }
-        .nav-item { text-align: center; color: #999; cursor: pointer; flex-grow: 1; padding: 10px; }
-        .nav-item.active { color: #000; font-weight: bold; }
-        .nav-icon { display: block; font-size: 1.5rem; margin-bottom: 2px; }
-        .report-card { background: white; padding: 15px; margin-bottom: 12px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    </style>
+  <meta name="theme-color" content="#ff6a00" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📍</text></svg>">
+
+  <!-- Leaflet (CSS obrigatório pro mapa) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Seu CSS -->
+  <link rel="stylesheet" href="/style.css" />
 </head>
+
 <body>
+  <div id="app" class="app">
 
-    <div id="app">
-        <div id="map-screen">
-            <div class="header-overlay">
-                <div class="header-info">
-                    <h1>OnSite Flow</h1>
-                    <div id="status-indicator" class="status-box waiting">Buscando satélites...</div>
-                </div>
-                <button id="btn-create-site" class="btn-create" title="Criar Nova Obra">➕🏗️</button>
-            </div>
-
-            <div id="geofence-alert">
-                <h3>📍 Obra Detectada!</h3>
-                <p id="geo-msg">Você entrou em "Obra A".</p>
-                <button class="btn-primary" id="btn-confirm-geo" style="margin-top:10px; background:white; color:black;">Confirmar Entrada</button>
-            </div>
-            
-            <div id="map"></div>
-            
-            <div class="controls-overlay">
-                <button id="action-btn" class="btn-primary" disabled>Aguardando GPS...</button>
-            </div>
+    <!-- DASHBOARD -->
+    <main id="dashboard-screen" class="tab-screen active" aria-label="Início">
+      <section class="card card-status" aria-label="Status">
+        <div id="gps-status-bar" class="gps-bar" role="status" aria-live="polite">
+          📡 Buscando Satélites...
         </div>
 
-        <div id="report-screen">
-            <h2 style="margin-top:0;">Histórico</h2>
-            <div id="report-list"><p style="text-align:center; color:#999;">Carregando...</p></div>
+        <div class="status-content">
+          <p class="status-title" id="status-label">Status Atual</p>
+          <div class="status-time" id="status-timer">--:--</div>
+          <div class="status-location" id="status-loc">
+            <span class="dot dot-idle" aria-hidden="true"></span>
+            <span>Não trabalhando</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="action-grid" aria-label="Ações">
+        <button id="btn-main-action" class="btn btn-big btn-primary" disabled>
+          <span class="btn-icon" aria-hidden="true">📍</span>
+          <span id="btn-main-text">Aguarde GPS</span>
+        </button>
+
+        <button id="btn-visit-action" class="btn btn-big btn-ghost" disabled>
+          <span class="btn-icon" aria-hidden="true">👁️</span>
+          <span>Visita</span>
+        </button>
+      </section>
+
+      <section aria-label="Histórico">
+        <header class="section-head">
+          <h2 class="section-title">Histórico Recente</h2>
+          <p class="section-subtitle">Últimos registros deste dispositivo.</p>
+        </header>
+
+        <div id="report-list" class="report-list">
+          <div class="empty-state">
+            <div class="spinner" aria-hidden="true"></div>
+            <p>Carregando...</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- MAPA -->
+    <main id="map-screen" class="tab-screen" aria-label="Locais">
+      <div class="map-overlay">
+        <div class="map-overlay-head">
+          <h2 class="map-title">Gerenciar Locais</h2>
+          <p class="map-subtitle">Cadastre obras e pontos de interesse direto do mapa.</p>
         </div>
 
-        <div class="bottom-nav">
-            <div class="nav-item active" id="tab-map"><span class="nav-icon">🗺️</span>Mapa</div>
-            <div class="nav-item" id="tab-report"><span class="nav-icon">📄</span>Relatórios</div>
+        <button id="btn-create-site" class="btn btn-primary btn-wide">
+          ➕ Adicionar Obra Aqui
+        </button>
+      </div>
+
+      <div id="map" class="map" aria-label="Mapa"></div>
+    </main>
+
+    <!-- ALERTA GEOFENCE -->
+    <div id="geofence-alert" class="geo-alert" role="dialog" aria-modal="true" aria-label="Chegada detectada">
+      <div class="geo-alert-body">
+        <h3 class="geo-title">📍 Você chegou!</h3>
+        <p id="geo-msg" class="geo-msg">Detectamos entrada em Obra A</p>
+
+        <div class="geo-actions">
+          <button id="btn-geo-visit" class="btn btn-ghost">Visita</button>
+          <button id="btn-geo-work" class="btn btn-success">Trabalhar</button>
         </div>
+
+        <button class="geo-close" type="button" aria-label="Fechar" onclick="document.getElementById('geofence-alert').style.display='none'">✕</button>
+      </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script> <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script type="module" src="src/app.js"></script>
-    
-    <script>
-        document.getElementById('tab-map').onclick = () => {
-            document.getElementById('map-screen').style.display = 'block';
-            document.getElementById('report-screen').classList.remove('visible');
-            document.getElementById('tab-map').classList.add('active');
-            document.getElementById('tab-report').classList.remove('active');
-        };
-        document.getElementById('tab-report').onclick = () => {
-            document.getElementById('map-screen').style.display = 'none';
-            document.getElementById('report-screen').classList.add('visible');
-            document.getElementById('tab-map').classList.remove('active');
-            document.getElementById('tab-report').classList.add('active');
-            if (window.loadReports) window.loadReports();
-        };
-    </script>
+    <!-- NAV -->
+    <nav class="bottom-nav" aria-label="Navegação">
+      <button class="nav-item active" id="tab-dash" type="button">
+        <span class="nav-icon" aria-hidden="true">🏠</span>
+        <span class="nav-label">Início</span>
+      </button>
+
+      <button class="nav-item" id="tab-map" type="button">
+        <span class="nav-icon" aria-hidden="true">🗺️</span>
+        <span class="nav-label">Locais</span>
+      </button>
+    </nav>
+  </div>
+
+  <!-- Libs -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Seu app -->
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>

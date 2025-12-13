@@ -1,278 +1,301 @@
-import { supabase } from './config.js';
+// src/app.js
+import { state } from "./state.js";
+import { ui } from "./ui.js";
+import { startGPS } from "./gps.js";
+import { detectSiteByGeofence } from "./geofence.js";
+import { startVisualTimer, stopVisualTimer } from "./timer.js";
+import {
+  fetchOpenRecord,
+  createCheckIn,
+  createVisit,
+  finishShift,
+  fetchReports,
+  deleteReport,
+  fetchSites,
+  createSite,
+  deleteSite
+} from "./supabaseApi.js";
 
-let map, userMarker, accuracyCircle;
-let currentPos = null;
-let knownSites = []; 
-let currentSite = null; 
-let currentRecordId = null; // ID do registro aberto no banco
-let isWorking = false; 
-
-// --- 1. INICIALIZAÇÃO ---
+// ---------- INIT ----------
 async function init() {
-    initMap();
-    await checkCurrentStatus(); // Verifica se já tem ponto aberto
-    await loadKnownSites(); 
-    startGPS();
-}
+  initMap();
+  ui.bindTabs();
 
-function initMap() {
-    map = L.map('map', { zoomControl: false }).setView([0, 0], 2);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-        attribution: 'Esri'
-    }).addTo(map);
-}
+  await hydrateWorkingState();
+  await refreshReports();
+  await refreshSitesOnMap();
 
-// --- 2. VERIFICAÇÃO DE STATUS (MEMÓRIA DO APP) ---
-async function checkCurrentStatus() {
-    // Busca o último registro que NÃO tem saída (ou seja, está aberto)
-    const { data, error } = await supabase
-        .from('registros')
-        .select('*')
-        .is('saida', null)
-        .order('entrada', { ascending: false })
-        .limit(1);
+  bindActions();
 
-    if (data && data.length > 0) {
-        // ACHOU UM TRABALHO ABERTO!
-        const registro = data[0];
-        isWorking = true;
-        currentRecordId = registro.id;
-        updateMainButton("🛑 Parar Trabalho", true);
-        console.log("Retomando trabalho aberto:", registro.local_nome);
-    }
-}
+  // GPS
+  startGPS({
+    onUpdate: async ({ lat, lng, acc, msg, styleClass }) => {
+      state.currentPos = { lat, lng };
 
-// --- 3. GESTÃO DE LOCAIS ---
-async function loadKnownSites() {
-    const { data } = await supabase.from('locais').select('*');
-    if (data) {
-        knownSites = data;
-        knownSites.forEach(site => {
-            L.circle([site.latitude, site.longitude], {
-                color: 'yellow', fillColor: '#f03', fillOpacity: 0.1, radius: site.raio || 100
-            }).addTo(map).bindPopup(`🏗️ ${site.nome}`);
+      ui.setGPSStatus(msg, styleClass, acc);
+      ui.enableActionButtons();
+      if (!state.isWorking) ui.setMainButtonText("Check-in Manual");
+
+      updateMapUserMarker(lat, lng, acc);
+
+      const found = detectSiteByGeofence(lat, lng);
+      if (found && (!state.currentSite || state.currentSite.id !== found.id)) {
+        state.currentSite = found;
+
+        ui.showGeofenceAlert({
+          siteName: found.nome,
+          onWork: () => doCheckIn(found.nome),
+          onVisit: () => doVisit(found.nome),
         });
+      } else if (!found && !state.isWorking) {
+        state.currentSite = null;
+      }
     }
+  });
 }
 
-// Botão Criar Obra (Gestor)
-document.getElementById('btn-create-site').addEventListener('click', async () => {
-    if (!currentPos) return alert("Aguarde o GPS...");
-    const nome = prompt("Nome da Nova Obra:");
+// ---------- MAP ----------
+function initMap() {
+  state.map = window.L.map("map", { zoomControl: false }).setView([45.4215, -75.6972], 13);
+
+  window.L.tileLayer(
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    { attribution: "Esri" }
+  ).addTo(state.map);
+}
+
+function updateMapUserMarker(lat, lng, acc) {
+  if (!state.map) return;
+
+  if (!state.userMarker) {
+    state.userMarker = window.L.marker([lat, lng]).addTo(state.map);
+    state.accuracyCircle = window.L.circle([lat, lng], { radius: acc }).addTo(state.map);
+    state.map.setView([lat, lng], 16);
+  } else {
+    state.userMarker.setLatLng([lat, lng]);
+    state.accuracyCircle.setLatLng([lat, lng]);
+    state.accuracyCircle.setRadius(acc);
+  }
+}
+
+async function refreshSitesOnMap() {
+  if (!state.map) return;
+
+  // remove circles antigos (exceto accuracyCircle)
+  state.map.eachLayer((layer) => {
+    if (layer instanceof window.L.Circle && layer !== state.accuracyCircle) {
+      state.map.removeLayer(layer);
+    }
+  });
+
+  state.knownSites = await fetchSites();
+
+  for (const site of state.knownSites) {
+    const circle = window.L.circle([site.latitude, site.longitude], {
+      color: "#333",
+      fillColor: "#333",
+      fillOpacity: 0.2,
+      radius: site.raio || 100,
+    }).addTo(state.map);
+
+    // mantém simples: usa dataset e um handler global mínimo
+    circle.bindPopup(`
+      <b>${site.nome}</b><br>
+      <button data-action="deleteSite" data-id="${site.id}" data-name="${site.nome}">Excluir</button>
+    `);
+
+    circle.on("popupopen", () => {
+      const popupEl = document.querySelector(".leaflet-popup-content");
+      if (!popupEl) return;
+
+      popupEl.addEventListener("click", async (e) => {
+        const btn = e.target?.closest?.("button[data-action='deleteSite']");
+        if (!btn) return;
+
+        const id = Number(btn.dataset.id);
+        const name = btn.dataset.name;
+
+        if (confirm(`Apagar a obra "${name}"?`)) {
+          await deleteSite(id);
+          await refreshSitesOnMap();
+          state.map.closePopup();
+        }
+      }, { once: true });
+    });
+  }
+}
+
+// ---------- STATE HYDRATION ----------
+async function hydrateWorkingState() {
+  try {
+    const open = await fetchOpenRecord(state.user.id);
+    if (open) {
+      state.isWorking = true;
+      state.currentRecordId = open.id;
+      state.startTime = new Date(open.entrada);
+      state.currentSite = { nome: open.local_nome };
+
+      ui.setWorkingUI({ isWorking: true, siteName: open.local_nome });
+      startVisualTimer();
+    } else {
+      state.isWorking = false;
+      state.currentRecordId = null;
+      state.startTime = null;
+      ui.setWorkingUI({ isWorking: false });
+      stopVisualTimer();
+    }
+  } catch (e) {
+    console.error(e);
+    ui.setWorkingUI({ isWorking: false });
+  }
+}
+
+// ---------- ACTIONS ----------
+function bindActions() {
+  // Botão criar site (map)
+  document.getElementById("btn-create-site")?.addEventListener("click", async () => {
+    if (!state.currentPos) return alert("Aguarde o GPS conectar.");
+
+    const nome = prompt("Nome da nova Obra/Local:");
     if (!nome) return;
 
-    const { error } = await supabase.from('locais').insert([{
-        nome: nome,
-        latitude: currentPos.lat,
-        longitude: currentPos.lng,
-        raio: 100
-    }]);
+    try {
+      await createSite({
+        nome,
+        latitude: state.currentPos.lat,
+        longitude: state.currentPos.lng,
+        raio: 100,
+      });
+      alert("Local Salvo!");
+      await refreshSitesOnMap();
+    } catch (e) {
+      alert("Erro ao salvar local: " + (e?.message || e));
+    }
+  });
 
-    if (!error) {
-        alert("✅ Obra criada!");
-        loadKnownSites();
+  // Main action (check-in / check-out)
+  document.getElementById("btn-main-action")?.addEventListener("click", async () => {
+    if (state.isWorking) {
+      await doCheckOut();
     } else {
-        alert("Erro: " + error.message);
+      const nome = state.currentSite?.nome || prompt("Nome do Local de Trabalho:");
+      if (nome) await doCheckIn(nome);
     }
-});
+  });
 
-// --- 4. GEOFENCE E GPS ---
-function startGPS() {
-    const status = document.getElementById('status-indicator');
-    navigator.geolocation.watchPosition(pos => {
-        currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        const acc = pos.coords.accuracy;
+  // Visit
+  document.getElementById("btn-visit-action")?.addEventListener("click", async () => {
+    const nome = state.currentSite?.nome || prompt("Nome do Local (Visita):");
+    if (nome) await doVisit(nome);
+  });
 
-        status.innerHTML = `✅ GPS Ativo (${Math.round(acc)}m)`;
-        status.className = 'status-box active';
+  // Delegação: delete/share em report list
+  document.getElementById("report-list")?.addEventListener("click", async (e) => {
+    const btn = e.target?.closest?.("button[data-action]");
+    if (!btn) return;
 
-        if (!userMarker) {
-            userMarker = L.marker([currentPos.lat, currentPos.lng]).addTo(map);
-            accuracyCircle = L.circle([currentPos.lat, currentPos.lng], { radius: acc }).addTo(map);
-            map.setView([currentPos.lat, currentPos.lng], 18);
-        } else {
-            userMarker.setLatLng([currentPos.lat, currentPos.lng]);
-            accuracyCircle.setLatLng([currentPos.lat, currentPos.lng]);
-            accuracyCircle.setRadius(acc);
-        }
+    const action = btn.dataset.action;
 
-        checkGeofence(currentPos.lat, currentPos.lng);
-        
-        // Ativa o botão se estiver travado
-        const btn = document.getElementById('action-btn');
-        if (btn.disabled) {
-            btn.removeAttribute('disabled');
-            if (!isWorking) btn.innerText = "📍 Check-in Manual";
-        }
+    if (action === "deleteReport") {
+      const id = Number(btn.dataset.id);
+      if (!confirm("Apagar este registro?")) return;
+      try {
+        await deleteReport(id);
+        await refreshReports();
+      } catch (err) {
+        alert("Erro ao apagar: " + (err?.message || err));
+      }
+    }
 
-    }, err => console.error(err), { enableHighAccuracy: true });
+    if (action === "shareReport") {
+      const txt = btn.dataset.text || "";
+      doShare(txt);
+    }
+  });
 }
-
-function checkGeofence(lat, lng) {
-    // Se já está trabalhando, a gente verifica se ele SAIU da obra
-    if (isWorking) {
-        // Lógica futura de saída automática...
-        return; 
-    }
-
-    let foundSite = null;
-    knownSites.forEach(site => {
-        const from = turf.point([lng, lat]);
-        const to = turf.point([site.longitude, site.latitude]);
-        const distance = turf.distance(from, to, { units: 'meters' });
-        if (distance < (site.raio || 100)) foundSite = site;
-    });
-
-    if (foundSite && currentSite !== foundSite) {
-        currentSite = foundSite;
-        showGeofenceAlert(foundSite);
-        updateMainButton("📍 Entrar em: " + foundSite.nome, false);
-    }
-}
-
-function showGeofenceAlert(site) {
-    const box = document.getElementById('geofence-alert');
-    document.getElementById('geo-msg').innerText = `Entrou na área: ${site.nome}`;
-    box.style.display = 'block';
-    document.getElementById('btn-confirm-geo').onclick = () => {
-        doCheckIn(site.nome);
-        box.style.display = 'none';
-    };
-}
-
-// --- 5. AÇÕES (ENTRADA / SAÍDA) ---
-const mainBtn = document.getElementById('action-btn');
-
-mainBtn.addEventListener('click', () => {
-    if (isWorking) {
-        doCheckOut();
-    } else {
-        const localNome = currentSite ? currentSite.nome : prompt("Nome do Local (Manual):");
-        if (localNome) doCheckIn(localNome);
-    }
-});
 
 async function doCheckIn(nomeLocal) {
-    mainBtn.innerText = "⏳ Abrindo ponto...";
-    
-    // Cria novo registro
-    const { data, error } = await supabase.from('registros').insert([{
-        local_nome: nomeLocal,
-        usuario: 'Usuário Teste',
-        entrada: new Date(),
-        saida: null
-    }]).select(); // .select() retorna o dado criado (precisamos do ID)
+  try {
+    const agora = new Date();
+    const rec = await createCheckIn({
+      userId: state.user.id,
+      localNome: nomeLocal,
+      entradaISO: agora.toISOString(),
+    });
 
-    if (!error && data) {
-        isWorking = true;
-        currentRecordId = data[0].id; // Guarda o ID para poder fechar depois
-        updateMainButton("🛑 Parar Trabalho", true);
-        alert(`✅ Turno iniciado em: ${nomeLocal}`);
-    } else {
-        alert("Erro: " + (error ? error.message : "Erro desconhecido"));
-        updateMainButton("📍 Check-in Manual", false);
-    }
+    state.isWorking = true;
+    state.currentRecordId = rec?.id || null;
+    state.startTime = agora;
+    state.currentSite = state.currentSite || { nome: nomeLocal };
+
+    ui.setWorkingUI({ isWorking: true, siteName: nomeLocal });
+    startVisualTimer();
+
+    await refreshReports();
+  } catch (e) {
+    alert("Erro ao salvar: " + (e?.message || e));
+  }
+}
+
+async function doVisit(nomeLocal) {
+  try {
+    const agora = new Date();
+    await createVisit({
+      userId: state.user.id,
+      localNome: nomeLocal,
+      entradaISO: agora.toISOString(),
+    });
+
+    alert(`👁️ Visita registrada em ${nomeLocal}!`);
+    await refreshReports();
+  } catch (e) {
+    alert("Erro: " + (e?.message || e));
+  }
 }
 
 async function doCheckOut() {
-    const conf = confirm("Deseja encerrar o turno e calcular as horas?");
-    if (!conf) return;
+  if (!state.currentRecordId) {
+    // se perdeu o id, tenta re-hidratar
+    await hydrateWorkingState();
+    if (!state.currentRecordId) return alert("Não encontrei turno aberto.");
+  }
 
-    mainBtn.innerText = "⏳ Fechando...";
+  if (!confirm("Encerrar turno de trabalho?")) return;
 
-    // Atualiza o registro existente (usa o ID guardado)
-    const { error } = await supabase
-        .from('registros')
-        .update({ saida: new Date() })
-        .eq('id', currentRecordId);
+  try {
+    await finishShift({ recordId: state.currentRecordId, saidaISO: new Date().toISOString() });
 
-    if (!error) {
-        isWorking = false;
-        currentRecordId = null;
-        currentSite = null;
-        updateMainButton("📍 Check-in Manual", false);
-        alert("⏹️ Turno fechado com sucesso!");
-        if(window.loadReports) window.loadReports(); // Atualiza relatório na hora
-    } else {
-        alert("Erro ao fechar: " + error.message);
-        updateMainButton("🛑 Parar Trabalho", true);
-    }
+    state.isWorking = false;
+    state.currentRecordId = null;
+    ui.setWorkingUI({ isWorking: false });
+    stopVisualTimer();
+
+    await refreshReports();
+  } catch (e) {
+    alert("Erro: " + (e?.message || e));
+  }
 }
 
-function updateMainButton(text, active) {
-    mainBtn.innerText = text;
-    if (active) mainBtn.classList.add('working');
-    else mainBtn.classList.remove('working');
+function doShare(txt) {
+  if (navigator.share) {
+    navigator.share({ title: "OnSite", text: txt });
+  } else {
+    navigator.clipboard.writeText(txt);
+    alert("Texto copiado!");
+  }
 }
 
-// --- 6. RELATÓRIOS E CÁLCULOS ---
-window.loadReports = async () => {
-    const list = document.getElementById('report-list');
-    list.innerHTML = "<p style='text-align:center'>Carregando...</p>";
-    
-    const { data } = await supabase
-        .from('registros')
-        .select('*')
-        .order('entrada', { ascending: false }); // Do mais novo pro mais velho
-    
-    list.innerHTML = "";
-    
-    if (data && data.length > 0) {
-        data.forEach(reg => {
-            const card = createReportCard(reg);
-            list.appendChild(card);
-        });
-    } else {
-        list.innerHTML = "<p style='text-align:center; color:#999'>Nenhum registro.</p>";
-    }
-};
-
-function createReportCard(reg) {
-    const div = document.createElement('div');
-    div.className = 'report-card';
-    
-    const dataDia = new Date(reg.entrada).toLocaleDateString('pt-BR', {day:'2-digit', month:'short'});
-    const horaEntrada = new Date(reg.entrada).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    
-    let conteudoHora = "";
-    
-    if (reg.saida) {
-        // CÁLCULO DE HORAS
-        const inicio = new Date(reg.entrada);
-        const fim = new Date(reg.saida);
-        const horaSaida = fim.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        
-        // Diferença em milissegundos
-        const diffMs = fim - inicio;
-        // Converte para horas e minutos
-        const totalMinutos = Math.floor(diffMs / 60000);
-        const horas = Math.floor(totalMinutos / 60);
-        const minutos = totalMinutos % 60;
-        
-        conteudoHora = `
-            <div style="color:#666; font-size:0.9em">
-                ${horaEntrada} - ${horaSaida}
-            </div>
-            <div style="font-weight:bold; color:#000; font-size:1.1em; margin-top:4px">
-                ⏱️ Total: ${horas}h ${minutos}m
-            </div>
-        `;
-    } else {
-        conteudoHora = `
-            <div style="color:#2ecc71; font-weight:bold;">
-                🟢 Em andamento desde ${horaEntrada}
-            </div>
-        `;
-    }
-
-    div.innerHTML = `
-        <div class="report-header">
-            <span>📍 ${reg.local_nome}</span>
-            <span>${dataDia}</span>
-        </div>
-        ${conteudoHora}
-    `;
-    return div;
+// ---------- REPORTS ----------
+async function refreshReports() {
+  try {
+    const reports = await fetchReports(state.user.id, 10);
+    ui.renderReports(reports);
+  } catch (e) {
+    console.error(e);
+    const list = document.getElementById("report-list");
+    if (list) list.innerHTML = '<p style="text-align:center; color:#999; margin-top:30px">Erro ao carregar.</p>';
+  }
 }
 
+// GO
 init();
