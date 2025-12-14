@@ -15,6 +15,7 @@
 
   --accent:#ff9f1a;
   --accent2:#ff7a18;
+
   --accentGlow: 0 0 0 1px rgba(255,159,26,0.18), 0 18px 50px rgba(255,122,24,0.18);
 
   --danger:#ff4b4b;
@@ -26,6 +27,10 @@
 
   --nav-h:76px;
   --maxw:620px;
+
+  /* Header fixo (altura “visual” do bloco de marca) */
+  --header-pad-top: max(10px, env(safe-area-inset-top));
+  --header-gap: 12px;
 }
 
 *{ box-sizing:border-box; }
@@ -52,24 +57,37 @@ body{
   .app{ max-width: var(--maxw); margin: 0 auto; }
 }
 
-/* Screens */
+/* =========================
+   Screens (FIX DEFINITIVO)
+   - não subtrai nav duas vezes
+   - padding-bottom garante conteúdo acima do menu
+   ========================= */
 .tab-screen{
   position:absolute;
-  top:0; left:0;
+  inset: 0;
   width:100%;
-  height: calc(100dvh - var(--nav-h) - env(safe-area-inset-bottom));
+  height:100dvh;
   overflow-y:auto;
   -webkit-overflow-scrolling: touch;
   display:none;
-  padding: 16px 14px 24px;
+
+  /* padding “conteúdo” */
+  padding:
+    calc(var(--header-pad-top) + 2px)
+    14px
+    calc(var(--nav-h) + env(safe-area-inset-bottom) + 18px)
+    14px;
 }
 .tab-screen.active{ display:block; }
 
-/* Header/Brand */
+/* =========================
+   Header/Brand (seu topo)
+   ========================= */
 .field-header{
-  margin-top: max(8px, env(safe-area-inset-top));
-  margin-bottom: 12px;
+  margin-top: 0;
+  margin-bottom: var(--header-gap);
 }
+
 .brand{
   display:flex;
   align-items:center;
@@ -81,12 +99,14 @@ body{
   box-shadow: 0 12px 40px rgba(0,0,0,0.35);
   backdrop-filter: blur(12px);
 }
+
 .brand-logo{
   height: 28px;
   width: auto;
   display:block;
   filter: drop-shadow(0 8px 18px rgba(0,0,0,0.45));
 }
+
 .brand-meta{ line-height: 1.1; }
 .brand-title{
   font-weight: 950;
@@ -100,7 +120,9 @@ body{
   color: rgba(154,168,190,0.85);
 }
 
-/* Cards */
+/* =========================
+   Cards
+   ========================= */
 .card{
   border-radius: var(--r-xl);
   border: 1px solid var(--line);
@@ -162,12 +184,16 @@ body{
   font-weight: 900;
 }
 
-/* Sections */
+/* =========================
+   Sections
+   ========================= */
 .section-head{ margin: 18px 0 12px; }
 .section-title{ margin:0; font-size: 16px; font-weight: 950; }
 .section-subtitle{ margin:6px 0 0; font-size: 13px; color: var(--muted); }
 
-/* Buttons */
+/* =========================
+   Buttons
+   ========================= */
 .btn{
   border:0;
   border-radius: var(--r-lg);
@@ -229,7 +255,9 @@ body{
   box-shadow: 0 0 0 1px rgba(255,75,75,0.20), 0 18px 50px rgba(255,75,75,0.18);
 }
 
-/* Reports */
+/* =========================
+   Reports
+   ========================= */
 .report-list{ margin-top: 10px; }
 .report-card{
   border-radius: var(--r-lg);
@@ -264,7 +292,9 @@ body{
   color: rgba(231,237,246,0.9);
 }
 
-/* Empty */
+/* =========================
+   Empty / Loading
+   ========================= */
 .empty-state{
   display:grid;
   place-items:center;
@@ -281,13 +311,19 @@ body{
 }
 @keyframes spin{ to{ transform: rotate(360deg); } }
 
-/* MAP — important: map must be 100% of the tab */
+/* =========================
+   MAP (FIX)
+   - mapa ocupa o tab inteiro
+   - overlay absoluto por cima
+   ========================= */
 #map-screen{
   padding: 0;
   overflow: hidden;
   background: #070b14;
 }
 #map{
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
 }
@@ -295,7 +331,9 @@ body{
 /* overlay on map */
 .map-overlay{
   position:absolute;
-  top: 14px; left: 14px; right: 14px;
+  top: calc(var(--header-pad-top) + 10px);
+  left: 14px;
+  right: 14px;
   z-index: 1000;
   border-radius: var(--r-lg);
   border: 1px solid rgba(255,255,255,0.12);
@@ -316,10 +354,13 @@ body{
   color: rgba(231,237,246,0.92) !important;
 }
 
-/* Geofence alert */
+/* =========================
+   Geofence alert
+   ========================= */
 .geo-alert{
   position:absolute;
-  top: 14px; left: 14px; right: 14px;
+  top: calc(var(--header-pad-top) + 10px);
+  left: 14px; right: 14px;
   z-index: 3000;
   display:none;
 }
@@ -337,7 +378,9 @@ body{
 .geo-actions{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @keyframes slideDown{ from{ transform: translateY(-10px); opacity:0; } to{ transform: translateY(0); opacity:1; } }
 
-/* Bottom nav */
+/* =========================
+   Bottom nav
+   ========================= */
 .bottom-nav{
   position:absolute;
   left:0; bottom:0;

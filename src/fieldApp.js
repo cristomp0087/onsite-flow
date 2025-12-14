@@ -8,6 +8,8 @@ import { hydrateWorkingState, checkIn, checkOut, visit } from "./core/records.js
 import { loadReports } from "./core/reports.js";
 import { syncTimer } from "./core/timer.js";
 import * as ui from "./core/ui.js";
+import { bindTabs } from "./core/nav.js";
+
 
 async function init() {
   try {
@@ -114,5 +116,17 @@ function bindMainActions() {
     if (nome) doVisit(nome);
   });
 }
+bindTabs({
+  onMapOpen: async () => {
+    await ensureMapReady(state);
+    drawSites(state);
+    // Leaflet precisa disso quando o mapa aparece depois de estar hidden
+    setTimeout(() => state.map?.invalidateSize?.(), 150);
+
+    if (state.currentPos) {
+      updateMapUser(state, state.currentPos.lat, state.currentPos.lng, state.currentPos.acc);
+    }
+  }
+});
 
 init();
