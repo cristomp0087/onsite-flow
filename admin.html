@@ -7,7 +7,9 @@
 
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗺️</text></svg>">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/css/styles.css" />
+
+  <!-- Seu CSS (use caminho RELATIVO) -->
+  <link rel="stylesheet" href="./css/styles.css" />
 </head>
 
 <body>
@@ -53,9 +55,9 @@
         <h2 style="margin:0 0 10px; font-size:14px; font-weight:950;">Registros</h2>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:10px;">
-          <input id="admin-filter-user" placeholder="filtrar usuário (id ou nome)" 
+          <input id="admin-filter-user" placeholder="filtrar usuário (id ou nome)"
                  style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); font-weight:800;" />
-          <input id="admin-filter-site" placeholder="filtrar obra" 
+          <input id="admin-filter-site" placeholder="filtrar obra"
                  style="width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,0.12); font-weight:800;" />
         </div>
 
@@ -93,6 +95,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- Admin App -->
-  <script type="module" src="./src/adminApp.js"></script>
+  <script type="module" src="./src/admin.js"></script>
 </body>
 </html>

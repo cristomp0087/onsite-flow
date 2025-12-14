@@ -5,49 +5,53 @@ import { ui } from "./ui.js";
 const USER_NAME = "Usuário Teste";
 const DEFAULT_RADIUS = 100;
 
-// estado (tudo aqui dentro pra não depender de state.js)
 const state = {
-  // gps
+  // GPS
   currentPos: null,
   gpsOk: false,
 
-  // geofence/sites
+  // Sites / Geofence
   knownSites: [],
   currentSite: null,
 
-  // work session
+  // Sessão de trabalho
   isWorking: false,
   currentRecordId: null,
   startTime: null,
   timerInterval: null,
 
-  // map
+  // Mapa
   map: null,
   mapInitialized: false,
   userMarker: null,
   accuracyCircle: null,
+
   siteCircles: [],
+
+  // Cadastro remoto (sem GPS)
+  pickMode: false,
+  draftLatLng: null,
+  draftMarker: null,
 };
 
-init().catch((e) => console.error(e));
+init().catch(console.error);
 
+/* ---------------------------
+   INIT
+---------------------------- */
 async function init() {
-  // tabs: mapa lazy (só inicializa quando abrir)
+  // Abas: mapa inicializa quando abrir "Locais"
   ui.bindTabs({ onMapOpen: ensureMapReady });
 
-  // carrega locais logo no começo (geofence precisa disso)
+  // Locais são necessários pro geofence mesmo sem abrir o mapa
   state.knownSites = await fetchSites();
 
-  // recupera estado (se existe registro aberto)
   await hydrateWorkingState();
-
-  // lista reports
   await loadReports();
 
-  // ações principais
   bindActions();
+  bindMapControls(); // botões/inputs da aba Locais
 
-  // inicia GPS
   startGPS();
 }
 
@@ -57,8 +61,8 @@ async function init() {
 function startGPS() {
   const options = {
     enableHighAccuracy: true,
-    timeout: 15000,       // 15s (mais realista)
-    maximumAge: 5000      // aceita cache recente
+    timeout: 15000,
+    maximumAge: 5000,
   };
 
   const onSuccess = (pos) => {
@@ -70,18 +74,17 @@ function startGPS() {
     // 1: PERMISSION_DENIED
     if (err?.code === 1) {
       ui.setGPSStatus("🚫 PERMISSÃO NEGADA", "error", null);
-      // aqui NÃO faz simulação, porque o usuário precisa liberar permissão
       return;
     }
 
-    // 3: TIMEOUT (muito comum)
+    // 3: TIMEOUT (comum em desktop)
     if (err?.code === 3) {
       ui.setGPSStatus("⏳ GPS LENTO… tentando novamente", "", null);
-      // tenta de novo com menos exigência
-      navigator.geolocation.getCurrentPosition(onSuccess, () => {
-        // fallback só se falhar novamente
-        onLocationUpdate(45.4215, -75.6972, 100, "⚠️ MODO TESTE (OTTAWA)", "error");
-      }, { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 });
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        () => onLocationUpdate(45.4215, -75.6972, 100, "⚠️ MODO TESTE (OTTAWA)", "error"),
+        { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 }
+      );
       return;
     }
 
@@ -94,13 +97,29 @@ function startGPS() {
   navigator.geolocation.watchPosition(onSuccess, onError, options);
 }
 
+/* Handler único: sempre que chega uma posição (real ou simulada) */
+function onLocationUpdate(lat, lng, acc, msg, styleClass) {
+  state.currentPos = { lat, lng, acc };
+  state.gpsOk = true;
+
+  ui.setGPSStatus(msg, styleClass, acc);
+  ui.enableActions();
+
+  if (!state.isWorking) ui.setMainButtonText("Check-in Manual");
+
+  // Atualiza marcador do usuário no mapa (se o mapa já existe)
+  updateMapUser(lat, lng, acc);
+
+  // Geofence independe do mapa
+  checkGeofence(lat, lng);
+}
 
 /* ---------------------------
-   Geofence
+   GEOFENCE
 ---------------------------- */
 function checkGeofence(lat, lng) {
   if (state.isWorking) return;
-  if (!state.knownSites || state.knownSites.length === 0) return;
+  if (!state.knownSites?.length) return;
   if (typeof window.turf === "undefined") return;
 
   let found = null;
@@ -133,7 +152,7 @@ function checkGeofence(lat, lng) {
 }
 
 /* ---------------------------
-   Timer (visual)
+   TIMER
 ---------------------------- */
 function startVisualTimer() {
   stopVisualTimer();
@@ -157,7 +176,7 @@ function stopVisualTimer() {
 }
 
 /* ---------------------------
-   Supabase: registros
+   SUPABASE: REGISTROS
 ---------------------------- */
 async function hydrateWorkingState() {
   const { data, error } = await supabase
@@ -186,6 +205,7 @@ async function hydrateWorkingState() {
     state.isWorking = false;
     state.currentRecordId = null;
     state.startTime = null;
+
     ui.setWorkingUI({ isWorking: false });
     stopVisualTimer();
   }
@@ -245,7 +265,7 @@ async function doVisit(localNome) {
 }
 
 /* ---------------------------
-   Supabase: locais
+   SUPABASE: LOCAIS
 ---------------------------- */
 async function fetchSites() {
   const { data, error } = await supabase.from("locais").select("*");
@@ -256,8 +276,18 @@ async function fetchSites() {
   return data || [];
 }
 
+async function createSite({ nome, latitude, longitude, raio }) {
+  const payload = { nome, latitude, longitude, raio: raio ?? DEFAULT_RADIUS };
+
+  const { error } = await supabase.from("locais").insert([payload]);
+  if (error) throw new Error(error.message);
+
+  state.knownSites = await fetchSites();
+  redrawSitesOnMap();
+}
+
 /* ---------------------------
-   Reports UI
+   REPORTS
 ---------------------------- */
 async function loadReports() {
   const list = document.getElementById("report-list");
@@ -358,7 +388,7 @@ function escapeHtml(str) {
 }
 
 /* ---------------------------
-   Actions
+   ACTIONS (DASHBOARD)
 ---------------------------- */
 function bindActions() {
   document.getElementById("btn-main-action")?.addEventListener("click", async () => {
@@ -376,32 +406,143 @@ function bindActions() {
 
     await doVisit(name);
   });
-
-  document.getElementById("btn-create-site")?.addEventListener("click", async () => {
-    if (!state.currentPos) return alert("Aguarde o GPS conectar.");
-    if (!state.mapInitialized) await ensureMapReady();
-
-    const nome = prompt("Nome da nova Obra/Local:");
-    if (!nome) return;
-
-    const payload = {
-      nome,
-      latitude: state.currentPos.lat,
-      longitude: state.currentPos.lng,
-      raio: DEFAULT_RADIUS,
-    };
-
-    const { error } = await supabase.from("locais").insert([payload]);
-    if (error) return alert("Erro ao salvar local: " + error.message);
-
-    alert("Local salvo!");
-    state.knownSites = await fetchSites();
-    redrawSitesOnMap();
-  });
 }
 
 /* ---------------------------
-   Map (lazy init)
+   MAP UI (LOCALS TAB)
+---------------------------- */
+function bindMapControls() {
+  const btnPick = document.getElementById("btn-pick-on-map");
+  const btnUseGps = document.getElementById("btn-use-gps");
+  const btnSave = document.getElementById("btn-save-site");
+  const hint = document.getElementById("pick-hint");
+
+  const searchInput = document.getElementById("site-search");
+  const resultsBox = document.getElementById("site-search-results");
+
+  // Marcar no mapa: não precisa GPS
+  btnPick?.addEventListener("click", async () => {
+    await ensureMapReady();
+    state.pickMode = true;
+
+    if (hint) hint.style.display = "block";
+    alert("Toque/clique no mapa para escolher o ponto da obra.");
+  });
+
+  // Usar posição (GPS) como ponto de cadastro
+  btnUseGps?.addEventListener("click", async () => {
+    await ensureMapReady();
+
+    if (!state.currentPos) {
+      alert("GPS ainda não conectou. Você pode clicar no mapa ou buscar por endereço.");
+      return;
+    }
+
+    setDraftPoint(state.currentPos.lat, state.currentPos.lng, true);
+    if (hint) hint.style.display = "none";
+    state.pickMode = false;
+  });
+
+  // Salvar local (usa draftLatLng OU GPS, mas NÃO exige GPS)
+  btnSave?.addEventListener("click", async () => {
+    await ensureMapReady();
+
+    const nome = prompt("Nome da Obra/Local:");
+    if (!nome) return;
+
+    const lat = state.draftLatLng?.lat ?? state.currentPos?.lat;
+    const lng = state.draftLatLng?.lng ?? state.currentPos?.lng;
+
+    if (lat == null || lng == null) {
+      alert("Sem coordenadas. Clique no mapa, busque um endereço, ou use o GPS.");
+      return;
+    }
+
+    try {
+      await createSite({ nome, latitude: lat, longitude: lng, raio: DEFAULT_RADIUS });
+      alert("Local salvo!");
+      state.pickMode = false;
+      if (hint) hint.style.display = "none";
+    } catch (e) {
+      alert("Erro ao salvar local: " + e.message);
+    }
+  });
+
+  // Busca por endereço (Nominatim / OSM) — MVP
+  if (searchInput && resultsBox) {
+    const doSearch = debounce(async () => {
+      const q = searchInput.value.trim();
+      if (q.length < 4) {
+        resultsBox.innerHTML = "";
+        return;
+      }
+
+      // MVP: Nominatim direto no front
+      // Em produção, o ideal é passar por um proxy/servidor por causa de rate limits/política.
+      const url =
+        "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&q=" +
+        encodeURIComponent(q);
+
+      try {
+        const res = await fetch(url, {
+          headers: {
+            "Accept": "application/json",
+          },
+        });
+
+        const items = await res.json();
+        renderSearchResults(items, resultsBox, async (item) => {
+          await ensureMapReady();
+          const lat = Number(item.lat);
+          const lng = Number(item.lon);
+          setDraftPoint(lat, lng, true);
+          resultsBox.innerHTML = "";
+          if (hint) hint.style.display = "none";
+          state.pickMode = false;
+        });
+      } catch (e) {
+        console.warn(e);
+        resultsBox.innerHTML = `<div class="search-item">Erro ao buscar endereço.</div>`;
+      }
+    }, 350);
+
+    searchInput.addEventListener("input", doSearch);
+  }
+}
+
+function renderSearchResults(items, box, onPick) {
+  if (!Array.isArray(items) || items.length === 0) {
+    box.innerHTML = `<div class="search-item">Nenhum resultado.</div>`;
+    return;
+  }
+
+  box.innerHTML = items
+    .map(
+      (it, idx) => `
+    <button class="search-item" type="button" data-idx="${idx}">
+      ${escapeHtml(it.display_name)}
+    </button>`
+    )
+    .join("");
+
+  box.querySelectorAll("[data-idx]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      onPick?.(items[idx]);
+    });
+  });
+}
+
+function debounce(fn, ms) {
+  let t = null;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+/* ---------------------------
+   MAP (lazy init)
 ---------------------------- */
 async function ensureMapReady() {
   if (state.mapInitialized) {
@@ -417,29 +558,70 @@ async function ensureMapReady() {
     return;
   }
 
-  state.map = window.L.map("map", { zoomControl: false }).setView([45.4215, -75.6972], 13);
+  const L = window.L;
 
-  window.L.tileLayer(
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    { attribution: "Esri" }
-  ).addTo(state.map);
+  state.map = L.map("map", { zoomControl: false }).setView([45.4215, -75.6972], 13);
+
+  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Esri",
+  }).addTo(state.map);
 
   state.mapInitialized = true;
-  window.map = state.map; // útil pra debug
+  window.map = state.map; // debug
 
-  // desenha locais
+  // clique no mapa para selecionar ponto (sem GPS)
+  state.map.on("click", (e) => {
+    if (!state.pickMode) return;
+    setDraftPoint(e.latlng.lat, e.latlng.lng, false);
+  });
+
+  // desenha sites já existentes
   redrawSitesOnMap();
 
-  // garante layout correto ao abrir a aba
+  // layout correto ao abrir aba
   setTimeout(() => state.map.invalidateSize(), 120);
+}
+
+function setDraftPoint(lat, lng, focus = true) {
+  if (!state.mapInitialized || !state.map || typeof window.L === "undefined") return;
+
+  const L = window.L;
+
+  state.draftLatLng = { lat, lng };
+
+  // UI: mostrar coords + habilitar salvar
+  const info = document.getElementById("draft-info");
+  const coords = document.getElementById("draft-coords");
+  const btnSave = document.getElementById("btn-save-site");
+
+  if (info) info.style.display = "flex";
+  if (coords) coords.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  if (btnSave) btnSave.disabled = false;
+
+  if (!state.draftMarker) {
+    state.draftMarker = L.marker([lat, lng], { draggable: true }).addTo(state.map);
+    state.draftMarker.on("dragend", () => {
+      const p = state.draftMarker.getLatLng();
+      state.draftLatLng = { lat: p.lat, lng: p.lng };
+      if (coords) coords.textContent = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+    });
+  } else {
+    state.draftMarker.setLatLng([lat, lng]);
+  }
+
+  if (focus) {
+    state.map.setView([lat, lng], Math.max(state.map.getZoom(), 16));
+  }
 }
 
 function updateMapUser(lat, lng, acc) {
   if (!state.mapInitialized || !state.map || typeof window.L === "undefined") return;
 
+  const L = window.L;
+
   if (!state.userMarker) {
-    state.userMarker = window.L.marker([lat, lng]).addTo(state.map);
-    state.accuracyCircle = window.L.circle([lat, lng], { radius: acc }).addTo(state.map);
+    state.userMarker = L.marker([lat, lng]).addTo(state.map);
+    state.accuracyCircle = L.circle([lat, lng], { radius: acc }).addTo(state.map);
     state.map.setView([lat, lng], 16);
   } else {
     state.userMarker.setLatLng([lat, lng]);
@@ -449,14 +631,16 @@ function updateMapUser(lat, lng, acc) {
 }
 
 function redrawSitesOnMap() {
-  if (!state.mapInitialized || !state.map) return;
+  if (!state.mapInitialized || !state.map || typeof window.L === "undefined") return;
+
+  const L = window.L;
 
   // remove círculos antigos
   state.siteCircles.forEach((c) => state.map.removeLayer(c));
   state.siteCircles = [];
 
   (state.knownSites || []).forEach((site) => {
-    const circle = window.L.circle([site.latitude, site.longitude], {
+    const circle = L.circle([site.latitude, site.longitude], {
       color: "#ff6a00",
       fillColor: "#ff6a00",
       fillOpacity: 0.15,
@@ -472,8 +656,8 @@ function redrawSitesOnMap() {
     `);
 
     circle.on("popupopen", () => {
-      const popupEl = document.querySelector(".leaflet-popup-content");
-      popupEl?.addEventListener(
+      const popupRoot = document.querySelector(".leaflet-popup-content");
+      popupRoot?.addEventListener(
         "click",
         async (e) => {
           const btn = e.target.closest("button[data-del-site]");
@@ -496,3 +680,4 @@ function redrawSitesOnMap() {
     state.siteCircles.push(circle);
   });
 }
+

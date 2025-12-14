@@ -10,8 +10,8 @@
   <!-- Leaflet CSS (obrigatório) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-  <!-- Seu CSS -->
-  <link rel="stylesheet" href="/css/styles.css" />
+  <!-- Seu CSS (use caminho RELATIVO) -->
+  <link rel="stylesheet" href="./css/styles.css" />
 </head>
 
 <body>
@@ -20,7 +20,9 @@
     <!-- DASHBOARD -->
     <main id="dashboard-screen" class="tab-screen active" aria-label="Início">
       <section class="card card-status">
-        <div id="gps-status-bar" class="gps-bar" role="status" aria-live="polite">📡 Buscando Satélites...</div>
+        <div id="gps-status-bar" class="gps-bar" role="status" aria-live="polite">
+          📡 Buscando Satélites...
+        </div>
 
         <div class="status-content">
           <p class="status-title" id="status-label">Status Atual</p>
@@ -61,9 +63,45 @@
       <div class="map-overlay">
         <div class="map-overlay-head">
           <h2 class="map-title">Gerenciar Locais</h2>
-          <p class="map-subtitle">Cadastre obras e pontos de interesse direto do mapa.</p>
+          <p class="map-subtitle">Cadastre obras por endereço, clicando no mapa ou usando sua posição.</p>
         </div>
-        <button id="btn-create-site" class="btn btn-primary btn-wide">➕ Adicionar Obra Aqui</button>
+
+        <!-- Busca por endereço -->
+        <div class="map-tools">
+          <label class="sr-only" for="site-search">Buscar endereço</label>
+          <input
+            id="site-search"
+            class="input"
+            type="search"
+            placeholder="Buscar endereço (ex: 100 Queen St, Ottawa)"
+            autocomplete="street-address"
+          />
+          <div id="site-search-results" class="search-results" aria-live="polite"></div>
+        </div>
+
+        <!-- Ações de cadastro -->
+        <div class="map-actions">
+          <button id="btn-pick-on-map" class="btn btn-ghost btn-wide" type="button">
+            📍 Marcar no mapa
+          </button>
+
+          <button id="btn-use-gps" class="btn btn-ghost btn-wide" type="button">
+            🛰️ Usar minha posição
+          </button>
+
+          <button id="btn-save-site" class="btn btn-primary btn-wide" type="button" disabled>
+            ➕ Salvar local
+          </button>
+        </div>
+
+        <p id="pick-hint" class="map-hint" style="display:none;">
+          Toque/clique no mapa para escolher o ponto. Você pode arrastar o pin.
+        </p>
+
+        <div id="draft-info" class="draft-info" style="display:none;">
+          <span class="draft-badge">PONTO SELECIONADO</span>
+          <span id="draft-coords" class="draft-coords">—</span>
+        </div>
       </div>
 
       <div id="map" class="map" aria-label="Mapa"></div>
@@ -101,7 +139,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-  <!-- App -->
-  <script type="module" src="./src/app.js"></script>
+  <!-- Field App (novo entrypoint) -->
+  <script type="module" src="./src/fieldApp.js"></script>
 </body>
 </html>
