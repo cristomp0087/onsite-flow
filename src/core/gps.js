@@ -1,105 +1,67 @@
 // src/core/gps.js
-// Exporta startGPS (NOME EXATO) para o fieldApp importar sem quebrar.
+// startGPS(onLocationUpdate, ui)
+// - onLocationUpdate(lat, lng, acc, msg, cls)
+// - cls: "active" | "error" | "" (visual)
 
-let watchId = null;
-
-const OTTAWA = { lat: 45.4215, lng: -75.6972 };
-
-function safeSet(ui, msg, cls, acc = null) {
-  try {
-    if (ui && typeof ui.setGPSStatus === "function") ui.setGPSStatus(msg, cls, acc);
-  } catch (_) {}
-}
-
-function safeOnLocationUpdate(onLocationUpdate, lat, lng, acc, msg, cls) {
-  if (typeof onLocationUpdate === "function") {
-    onLocationUpdate(lat, lng, acc, msg, cls);
-  } else {
-    console.warn("[gps] onLocationUpdate não foi passado/é inválido");
-  }
-}
-
-/**
- * startGPS(onLocationUpdate, ui)
- * - onLocationUpdate(lat, lng, acc, msg, styleClass)
- * - ui.setGPSStatus(msg, styleClass, acc) (opcional)
- */
 export function startGPS(onLocationUpdate, ui) {
-  if (!("geolocation" in navigator)) {
-    safeSet(ui, "🚫 SEM SUPORTE A GPS", "error", null);
-    safeOnLocationUpdate(onLocationUpdate, OTTAWA.lat, OTTAWA.lng, 100, "⚠️ MODO TESTE (OTTAWA)", "error");
-    return null;
+  if (typeof onLocationUpdate !== "function") {
+    console.error("[GPS] onLocationUpdate não foi passado/é inválido.");
+    return () => {};
   }
 
   const options = {
     enableHighAccuracy: true,
-    timeout: 15000,
-    maximumAge: 5000,
+    timeout: 15000,   // 15s
+    maximumAge: 5000, // aceita cache recente
+  };
+
+  const OTTAWA = { lat: 45.4215, lng: -75.6972, acc: 100 };
+
+  const emitTestMode = (reason = "MODO TESTE (OTTAWA)") => {
+    // visualmente "error" (pra ficar claro que é teste),
+    // mas a gente vai liberar o app no fieldApp.js.
+    onLocationUpdate(OTTAWA.lat, OTTAWA.lng, OTTAWA.acc, `⚠️ ${reason}`, "error");
   };
 
   const onSuccess = (pos) => {
     const { latitude, longitude, accuracy } = pos.coords;
-    safeOnLocationUpdate(
-      onLocationUpdate,
-      latitude,
-      longitude,
-      Math.round(accuracy),
-      "📡 GPS ATIVO",
-      "active"
-    );
+    onLocationUpdate(latitude, longitude, Math.round(accuracy), "📡 GPS ATIVO", "active");
   };
 
   const onError = (err) => {
+    const code = err?.code;
+
     // 1: PERMISSION_DENIED
-    if (err?.code === 1) {
-      safeSet(ui, "🚫 PERMISSÃO NEGADA", "error", null);
-      return; // sem simulação aqui, o usuário precisa permitir
+    if (code === 1) {
+      ui?.setGPSStatus?.("🚫 PERMISSÃO NEGADA", "error", null);
+      // Não simula aqui: se o user negou, ele precisa liberar.
+      return;
     }
 
-    // 3: TIMEOUT -> tenta um getCurrentPosition menos exigente
-    if (err?.code === 3) {
-      safeSet(ui, "⏳ GPS LENTO… tentando novamente", "", null);
+    // 3: TIMEOUT (comum)
+    if (code === 3) {
+      ui?.setGPSStatus?.("⏳ GPS LENTO… tentando novamente", "", null);
 
+      // tenta de novo com menos exigência
       navigator.geolocation.getCurrentPosition(
         onSuccess,
-        () => {
-          safeOnLocationUpdate(
-            onLocationUpdate,
-            OTTAWA.lat,
-            OTTAWA.lng,
-            100,
-            "⚠️ MODO TESTE (OTTAWA)",
-            "error"
-          );
-        },
+        () => emitTestMode("MODO TESTE (OTTAWA)"),
         { enableHighAccuracy: false, timeout: 20000, maximumAge: 10000 }
       );
       return;
     }
 
     // 2: POSITION_UNAVAILABLE ou outros
-    safeOnLocationUpdate(
-      onLocationUpdate,
-      OTTAWA.lat,
-      OTTAWA.lng,
-      100,
-      "⚠️ MODO TESTE (OTTAWA)",
-      "error"
-    );
+    emitTestMode("MODO TESTE (OTTAWA)");
   };
 
-  // (re)start watch
-  try {
-    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  } catch (_) {}
-
-  watchId = navigator.geolocation.watchPosition(onSuccess, onError, options);
-  return watchId;
-}
-
-export function stopGPS() {
-  if (watchId !== null && "geolocation" in navigator) {
-    navigator.geolocation.clearWatch(watchId);
+  if (!navigator.geolocation) {
+    emitTestMode("SEM SUPORTE A GPS");
+    return () => {};
   }
-  watchId = null;
+
+  const watchId = navigator.geolocation.watchPosition(onSuccess, onError, options);
+
+  // Retorna função de parar (se quiser usar depois)
+  return () => navigator.geolocation.clearWatch(watchId);
 }
