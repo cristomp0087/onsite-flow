@@ -1,225 +1,28 @@
 // src/core/reports.js
 import { supabase } from "../config.js";
 
-/**
- * Ajuste só isto se precisar:
- * - Nome da tabela
- * - Nome da coluna de "created_at" se for diferente
- */
+// ✅ Ajuste aqui se seu nome de tabela for outro
 const TABLE = "registros";
-const ORDER_COL = "created_at";
-const LIMIT = 80;
 
-/* ---------------------------
-   Helpers de data/hora
----------------------------- */
-const fmtDate = (d) =>
-  new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", year: "numeric" }).format(d);
+// ✅ Temporário (até login)
+const TEMP_USER_NAME = "Cristony";
 
-const fmtTime = (d) =>
-  new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(d);
+const SELECT_HOLD_MS = 520;
 
-const fmtWeekday = (d) =>
-  new Intl.DateTimeFormat("pt-BR", { weekday: "short" }).format(d);
+let uiBound = false;
+let selectionMode = false;
+let selectedIds = new Set();
+let holdTimer = null;
+let holdTargetId = null;
 
-function parseDateSafe(v) {
-  if (!v) return null;
-  const d = (v instanceof Date) ? v : new Date(v);
-  return Number.isFinite(d.getTime()) ? d : null;
-}
-
-function minutesBetween(a, b) {
-  if (!a || !b) return 0;
-  return Math.max(0, Math.round((b.getTime() - a.getTime()) / 60000));
-}
-
-function fmtHM(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  const hh = String(h).padStart(2, "0");
-  const mm = String(m).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
-function normalizeRecord(r, fallbackPerson = "Usuário") {
-  const start =
-    parseDateSafe(r.check_in_at) ||
-    parseDateSafe(r.started_at) ||
-    parseDateSafe(r.start_at) ||
-    parseDateSafe(r.in_at) ||
-    parseDateSafe(r.entrada_at) ||
-    parseDateSafe(r.created_at);
-
-  const end =
-    parseDateSafe(r.check_out_at) ||
-    parseDateSafe(r.ended_at) ||
-    parseDateSafe(r.end_at) ||
-    parseDateSafe(r.out_at) ||
-    parseDateSafe(r.saida_at) ||
-    null;
-
-  const person =
-    r.person_name ||
-    r.user_name ||
-    r.nome ||
-    r.pessoa ||
-    fallbackPerson;
-
-  const site =
-    r.site_name ||
-    r.local_nome ||
-    r.localNome ||
-    r.obra ||
-    r.site ||
-    "—";
-
-  const type =
-    r.type ||
-    r.tipo ||
-    (r.is_visit ? "VISITA" : "TRABALHO");
-
-  const id = r.id ?? r.uuid ?? r.record_id;
-
-  return { id, person, site, type, start, end, raw: r };
-}
-
-/* ---------------------------
-   UI: batch modal (seleção)
----------------------------- */
-function ensureBatchModal() {
-  if (document.getElementById("batch-modal")) return;
-
-  const modal = document.createElement("div");
-  modal.id = "batch-modal";
-  modal.className = "batch-modal";
-  modal.innerHTML = `
-    <div class="batch-backdrop" data-batch="close"></div>
-    <div class="batch-sheet" role="dialog" aria-modal="true" aria-label="Relatório selecionado">
-      <div class="batch-head">
-        <div>
-          <div class="batch-title">Relatório Selecionado</div>
-          <div class="batch-subtitle" id="batch-subtitle">0 itens</div>
-        </div>
-        <button class="batch-close" type="button" data-batch="close" aria-label="Fechar">✕</button>
-      </div>
-
-      <div class="batch-summary">
-        <div class="batch-kpi">
-          <div class="kpi-label">Total de horas</div>
-          <div class="kpi-value" id="batch-total">00:00</div>
-        </div>
-        <div class="batch-actions">
-          <button class="btn btn-ghost" type="button" data-batch="clear">Limpar</button>
-          <button class="btn btn-primary" type="button" data-batch="export">Exportar</button>
-        </div>
-      </div>
-
-      <div class="batch-list" id="batch-list"></div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-}
-
-function openBatchModal() {
-  const modal = document.getElementById("batch-modal");
-  if (!modal) return;
-  modal.classList.add("open");
-}
-
-function closeBatchModal() {
-  const modal = document.getElementById("batch-modal");
-  if (!modal) return;
-  modal.classList.remove("open");
-}
-
-/* ---------------------------
-   Export CSV
----------------------------- */
-function downloadCSV(filename, rows) {
-  const escape = (v) => {
-    const s = String(v ?? "");
-    if (/[,"\n]/.test(s)) return `"${s.replaceAll('"', '""')}"`;
-    return s;
-  };
-
-  const csv = rows.map((r) => r.map(escape).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-/* ---------------------------
-   Render do card
----------------------------- */
-function buildReportCard(rec) {
-  const day = rec.start ? fmtDate(rec.start) : "—";
-  const inTime = rec.start ? fmtTime(rec.start) : "—";
-  const outTime = rec.end ? fmtTime(rec.end) : "—";
-
-  const totalMins = rec.start
-    ? minutesBetween(rec.start, rec.end ?? new Date())
-    : 0;
-
-  const totalHM = fmtHM(totalMins);
-
-  const statusLine = rec.end
-    ? `${inTime} → ${outTime}`
-    : `${inTime} → —  •  Em andamento…`;
-
-  const typeLabel = String(rec.type || "").toUpperCase();
-  const typeBadge = typeLabel.includes("VISIT") ? "badge badge-visit" : "badge badge-work";
-
-  const el = document.createElement("div");
-  el.className = "report-card selectable";
-  el.dataset.id = rec.id ?? "";
-  el.dataset.start = rec.start ? rec.start.toISOString() : "";
-  el.dataset.end = rec.end ? rec.end.toISOString() : "";
-  el.dataset.person = rec.person ?? "";
-  el.dataset.site = rec.site ?? "";
-  el.dataset.type = rec.type ?? "";
-
-  el.innerHTML = `
-    <div class="report-top">
-      <div class="report-person">${rec.person || "—"}</div>
-      <div class="report-date">${day}</div>
-    </div>
-
-    <div class="report-mid">
-      <div class="report-site">${rec.site || "—"}</div>
-      <div class="${typeBadge}">${typeLabel || "—"}</div>
-    </div>
-
-    <div class="report-line">
-      <div class="report-io">${statusLine}</div>
-      <div class="report-total">${totalHM}</div>
-    </div>
-
-    <div class="card-actions">
-      <button class="action-btn-small" type="button" data-action="delete" title="Excluir">🗑</button>
-      <button class="action-btn-small" type="button" data-action="export" title="Exportar">📤</button>
-    </div>
-
-    <div class="select-pill" aria-hidden="true">Selecionado</div>
-  `;
-  return el;
-}
-
-/* ---------------------------
-   Load + Render + Selection
----------------------------- */
+// ---------- Public API ----------
 export async function loadReports(state) {
   const listEl = document.getElementById("report-list");
   if (!listEl) return;
 
-  ensureBatchModal();
+  bindReportsUIOnce(state, listEl);
 
+  // UI loading
   listEl.innerHTML = `
     <div class="empty-state">
       <div class="spinner" aria-hidden="true"></div>
@@ -227,290 +30,475 @@ export async function loadReports(state) {
     </div>
   `;
 
-  // Pessoa: prioriza estado, senão cai no fallback
-  const fallbackPerson =
-    state?.profileName ||
-    state?.userName ||
-    state?.deviceName ||
-    "Usuário";
-
-  let rows = [];
   try {
     const { data, error } = await supabase
       .from(TABLE)
       .select("*")
-      .order(ORDER_COL, { ascending: false })
-      .limit(LIMIT);
+      .order("created_at", { ascending: false })
+      .limit(80);
 
     if (error) throw error;
-    rows = (data || []).map((r) => normalizeRecord(r, fallbackPerson));
-  } catch (e) {
-    console.error("Erro ao carregar relatórios:", e);
+
+    // guarda em state (opcional)
+    state.reports = Array.isArray(data) ? data : [];
+
+    renderReports(listEl, state.reports);
+  } catch (err) {
+    console.error("Erro ao carregar relatórios:", err);
+
     listEl.innerHTML = `
       <div class="empty-state">
-        <p>Erro ao carregar relatórios.</p>
+        <p style="text-align:center">
+          ⚠️ Erro ao carregar relatórios.<br/>
+          Abra o console para detalhes.
+        </p>
       </div>
     `;
-    return;
   }
+}
 
-  state.reports = rows;
+// ---------- UI Binding ----------
+function bindReportsUIOnce(state, listEl) {
+  if (uiBound) return;
+  uiBound = true;
 
-  if (!rows.length) {
+  // Click (delegation)
+  listEl.addEventListener("click", async (e) => {
+    const card = e.target.closest("[data-report-id]");
+    if (!card) return;
+
+    const id = card.getAttribute("data-report-id");
+
+    // Delete
+    if (e.target.closest("[data-action='delete']")) {
+      e.preventDefault();
+      e.stopPropagation();
+      await onDelete(state, id);
+      return;
+    }
+
+    // Share single
+    if (e.target.closest("[data-action='share']")) {
+      e.preventDefault();
+      e.stopPropagation();
+      const report = findReportById(state, id);
+      if (!report) return;
+      await shareSelectedReports([report]);
+      return;
+    }
+
+    // Toggle selection if in selectionMode
+    if (selectionMode) {
+      toggleSelected(id);
+      updateSelectionUI();
+      return;
+    }
+
+    // Normal tap: nada (ou futuramente abrir detalhe)
+  });
+
+  // Long press handlers (touch + mouse)
+  const startHold = (id) => {
+    clearHold();
+    holdTargetId = id;
+    holdTimer = setTimeout(() => {
+      // enter selection mode
+      selectionMode = true;
+      selectedIds.add(id);
+      ensureSelectionBar();
+      updateSelectionUI();
+    }, SELECT_HOLD_MS);
+  };
+
+  const endHold = () => clearHold();
+
+  // touch
+  listEl.addEventListener("touchstart", (e) => {
+    const card = e.target.closest("[data-report-id]");
+    if (!card) return;
+    const id = card.getAttribute("data-report-id");
+
+    // não dispara hold se tocou em botões
+    if (e.target.closest("[data-action]")) return;
+
+    startHold(id);
+  }, { passive: true });
+
+  listEl.addEventListener("touchend", endHold, { passive: true });
+  listEl.addEventListener("touchmove", endHold, { passive: true });
+  listEl.addEventListener("touchcancel", endHold, { passive: true });
+
+  // mouse
+  listEl.addEventListener("mousedown", (e) => {
+    const card = e.target.closest("[data-report-id]");
+    if (!card) return;
+    const id = card.getAttribute("data-report-id");
+    if (e.target.closest("[data-action]")) return;
+    startHold(id);
+  });
+
+  window.addEventListener("mouseup", endHold);
+
+  // Selection bar actions
+  document.addEventListener("click", async (e) => {
+    // share selected
+    if (e.target.closest("#sel-share")) {
+      const reports = Array.from(selectedIds)
+        .map((id) => findReportById(state, id))
+        .filter(Boolean);
+
+      if (!reports.length) return;
+      await shareSelectedReports(reports);
+      return;
+    }
+
+    // cancel selection
+    if (e.target.closest("#sel-cancel")) {
+      exitSelectionMode();
+      updateSelectionUI();
+      return;
+    }
+  });
+}
+
+function clearHold() {
+  if (holdTimer) clearTimeout(holdTimer);
+  holdTimer = null;
+  holdTargetId = null;
+}
+
+// ---------- Render ----------
+function renderReports(listEl, reports) {
+  if (!Array.isArray(reports) || reports.length === 0) {
     listEl.innerHTML = `
       <div class="empty-state">
         <p>Sem registros ainda.</p>
       </div>
     `;
+    exitSelectionMode();
+    updateSelectionUI();
     return;
   }
 
-  // Render
-  listEl.innerHTML = "";
-  for (const r of rows) listEl.appendChild(buildReportCard(r));
+  // render cards
+  listEl.innerHTML = reports.map((r) => renderCardHTML(r)).join("");
 
-  // Bind ações (delete/export)
-  listEl.addEventListener("click", async (ev) => {
-    const btn = ev.target?.closest?.("[data-action]");
-    if (!btn) return;
-
-    // Se estamos em modo seleção, clique não executa ação
-    if (selection.mode) return;
-
-    const card = ev.target.closest(".report-card");
-    const id = card?.dataset?.id;
-    if (!id) return;
-
-    const action = btn.dataset.action;
-
-    if (action === "delete") {
-      if (!confirm("Excluir este registro?")) return;
-      await deleteRecord(id);
-      await loadReports(state);
-    }
-
-    if (action === "export") {
-      const rec = state.reports.find((x) => String(x.id) === String(id));
-      if (!rec) return;
-      exportSingle(rec);
-    }
-  });
-
-  // Selection mode (press & hold)
-  bindSelection(listEl, state);
+  // depois de render, re-aplica seleção visual se existir
+  updateSelectionUI();
 }
 
-/* ---------------------------
-   Delete / Export
----------------------------- */
-async function deleteRecord(id) {
-  const { error } = await supabase.from(TABLE).delete().eq("id", id);
-  if (error) {
-    console.error(error);
-    alert("Não foi possível excluir.");
-  }
-}
+function renderCardHTML(r) {
+  const id = safeId(r);
 
-function exportSingle(rec) {
-  const start = rec.start ? fmtDate(rec.start) : "—";
-  const inTime = rec.start ? fmtTime(rec.start) : "—";
-  const outTime = rec.end ? fmtTime(rec.end) : "—";
-  const total = rec.start ? fmtHM(minutesBetween(rec.start, rec.end ?? new Date())) : "00:00";
+  const site = getSiteName(r) || "—";
+  const kind = getKindLabel(r); // "Trabalho" / "Visita"
+  const status = getStatusLabel(r); // "Em andamento..." / "Concluído"
+  const dateLabel = formatDateShort(getStartISO(r) || r.created_at);
 
-  const rows = [
-    ["Pessoa", "Obra", "Data", "Entrada", "Saída", "Total", "Tipo"],
-    [rec.person, rec.site, start, inTime, outTime, total, String(rec.type || "").toUpperCase()],
-  ];
+  const inISO = getStartISO(r);
+  const outISO = getEndISO(r);
 
-  const safeName = String(rec.site || "obra").replaceAll(/[^\w\-]+/g, "_");
-  downloadCSV(`onsite_${safeName}_${Date.now()}.csv`, rows);
-}
+  const inTime = inISO ? formatTime(inISO) : "--:--";
+  const outTime = outISO ? formatTime(outISO) : "—";
+  const total = calcTotalLabel(inISO, outISO);
 
-/* ---------------------------
-   Selection system
----------------------------- */
-const selection = {
-  mode: false,
-  ids: new Set(),
-};
-
-function bindSelection(listEl, state) {
-  // Batch modal controls
-  const modal = document.getElementById("batch-modal");
-  modal?.addEventListener("click", (ev) => {
-    const t = ev.target?.closest?.("[data-batch]");
-    if (!t) return;
-
-    const a = t.dataset.batch;
-    if (a === "close") {
-      closeBatchModal();
-      exitSelection(listEl);
-    }
-    if (a === "clear") {
-      selection.ids.clear();
-      refreshSelectionUI(listEl, state);
-    }
-    if (a === "export") {
-      exportBatch(state);
-    }
-  });
-
-  // Press & hold
-  let pressTimer = null;
-  let pressedCard = null;
-
-  const startPress = (card) => {
-    pressedCard = card;
-    clearTimeout(pressTimer);
-    pressTimer = setTimeout(() => {
-      enterSelection(listEl);
-      toggleSelected(card);
-      refreshSelectionUI(listEl, state);
-      openBatchModal();
-    }, 450);
-  };
-
-  const cancelPress = () => {
-    clearTimeout(pressTimer);
-    pressTimer = null;
-    pressedCard = null;
-  };
-
-  listEl.addEventListener("pointerdown", (ev) => {
-    const card = ev.target?.closest?.(".report-card");
-    if (!card) return;
-    if (ev.target?.closest?.("[data-action]")) return; // não começa seleção se clicou em botões
-    startPress(card);
-  });
-
-  listEl.addEventListener("pointerup", cancelPress);
-  listEl.addEventListener("pointercancel", cancelPress);
-  listEl.addEventListener("pointermove", cancelPress);
-
-  // Clique normal em modo seleção = toggle
-  listEl.addEventListener("click", (ev) => {
-    if (!selection.mode) return;
-    if (ev.target?.closest?.("[data-action]")) return;
-
-    const card = ev.target?.closest?.(".report-card");
-    if (!card) return;
-
-    toggleSelected(card);
-    refreshSelectionUI(listEl, state);
-    openBatchModal();
-  });
-}
-
-function enterSelection(listEl) {
-  selection.mode = true;
-  listEl.classList.add("select-mode");
-}
-
-function exitSelection(listEl) {
-  selection.mode = false;
-  selection.ids.clear();
-  listEl.classList.remove("select-mode");
-  for (const card of listEl.querySelectorAll(".report-card.selected")) {
-    card.classList.remove("selected");
-  }
-}
-
-function toggleSelected(card) {
-  const id = card?.dataset?.id;
-  if (!id) return;
-
-  if (selection.ids.has(id)) selection.ids.delete(id);
-  else selection.ids.add(id);
-}
-
-function refreshSelectionUI(listEl, state) {
-  // Marca cards
-  for (const card of listEl.querySelectorAll(".report-card")) {
-    const id = card.dataset.id;
-    const on = selection.ids.has(id);
-    card.classList.toggle("selected", on);
-  }
-
-  // Atualiza modal
-  const items = state.reports.filter((r) => selection.ids.has(String(r.id)));
-  const sub = document.getElementById("batch-subtitle");
-  const totalEl = document.getElementById("batch-total");
-  const list = document.getElementById("batch-list");
-
-  if (sub) sub.textContent = `${items.length} item(ns)`;
-  if (list) list.innerHTML = "";
-
-  let totalMins = 0;
-
-  for (const r of items) {
-    const end = r.end ?? new Date();
-    const mins = r.start ? minutesBetween(r.start, end) : 0;
-    totalMins += mins;
-
-    const line = document.createElement("div");
-    line.className = "batch-row";
-    const day = r.start ? fmtDate(r.start) : "—";
-    const week = r.start ? fmtWeekday(r.start) : "—";
-    const dom = r.start ? String(r.start.getDate()).padStart(2, "0") : "—";
-    const inT = r.start ? fmtTime(r.start) : "—";
-    const outT = r.end ? fmtTime(r.end) : "—";
-
-    line.innerHTML = `
-      <div class="batch-row-top">
-        <div class="batch-row-person">${r.person || "—"}</div>
-        <div class="batch-row-date">${week} • ${dom} • ${day}</div>
+  // Ações por card: share/delete (sem <a download> => sem baixar nada no celular)
+  return `
+    <article class="report-card" data-report-id="${id}">
+      <div class="report-header">
+        <div class="report-title">
+          <div class="report-site">${escapeHtml(site)}</div>
+          <div class="report-kind">${kind} <span class="report-status">${status}</span></div>
+        </div>
+        <div class="report-date">${dateLabel}</div>
       </div>
-      <div class="batch-row-mid">
-        <div class="batch-row-site">${r.site || "—"}</div>
-        <div class="batch-row-type">${String(r.type || "").toUpperCase()}</div>
-      </div>
-      <div class="batch-row-line">
-        <div class="batch-row-io">${inT} → ${outT || "—"}</div>
-        <div class="batch-row-total">${fmtHM(mins)}</div>
-      </div>
-    `;
-    list?.appendChild(line);
-  }
 
-  if (totalEl) totalEl.textContent = fmtHM(totalMins);
+      <div class="report-meta">
+        <div class="report-row">
+          <span class="report-label">Entrada</span>
+          <span class="report-val">${inTime}</span>
+        </div>
+        <div class="report-row">
+          <span class="report-label">Saída</span>
+          <span class="report-val">${outTime}</span>
+        </div>
+        <div class="report-row">
+          <span class="report-label">Total</span>
+          <span class="report-val">${total}</span>
+        </div>
+      </div>
 
-  // Se não tem itens, fecha
-  if (!items.length) {
-    closeBatchModal();
-    exitSelection(listEl);
+      <div class="card-actions">
+        <button class="action-btn-small" data-action="delete" title="Excluir" aria-label="Excluir">🗑️</button>
+        <button class="action-btn-small" data-action="share" title="Compartilhar" aria-label="Compartilhar">📤</button>
+      </div>
+    </article>
+  `;
+}
+
+// ---------- Delete (fix loop) ----------
+async function onDelete(state, id) {
+  const ok = confirm("Excluir este relatório?");
+  if (!ok) return;
+
+  try {
+    const { error } = await supabase.from(TABLE).delete().eq("id", id);
+    if (error) throw error;
+
+    // remove do state e re-render
+    state.reports = (state.reports || []).filter((r) => safeId(r) !== id);
+    const listEl = document.getElementById("report-list");
+    if (listEl) renderReports(listEl, state.reports);
+
+    // se estava selecionado, remove
+    if (selectedIds.has(id)) {
+      selectedIds.delete(id);
+      updateSelectionUI();
+    }
+  } catch (e) {
+    console.error("Erro ao excluir:", e);
+    alert("Não foi possível excluir. Veja o console.");
   }
 }
 
-function exportBatch(state) {
-  const items = state.reports.filter((r) => selection.ids.has(String(r.id)));
-  if (!items.length) return;
+// ---------- Selection Mode ----------
+function toggleSelected(id) {
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
 
-  let totalMins = 0;
+  if (selectedIds.size === 0) exitSelectionMode();
+}
 
-  const rows = [
-    ["Pessoa", "Obra", "DiaSemana", "DiaMês", "Data", "Entrada", "Saída", "Total", "Tipo"],
-  ];
+function exitSelectionMode() {
+  selectionMode = false;
+  selectedIds.clear();
+  const bar = document.getElementById("selection-bar");
+  if (bar) bar.classList.remove("show");
+}
 
-  for (const r of items) {
-    const end = r.end ?? new Date();
-    const mins = r.start ? minutesBetween(r.start, end) : 0;
-    totalMins += mins;
-
-    rows.push([
-      r.person,
-      r.site,
-      r.start ? fmtWeekday(r.start) : "—",
-      r.start ? String(r.start.getDate()).padStart(2, "0") : "—",
-      r.start ? fmtDate(r.start) : "—",
-      r.start ? fmtTime(r.start) : "—",
-      r.end ? fmtTime(r.end) : "—",
-      fmtHM(mins),
-      String(r.type || "").toUpperCase(),
-    ]);
+function ensureSelectionBar() {
+  let bar = document.getElementById("selection-bar");
+  if (bar) {
+    bar.classList.add("show");
+    return;
   }
 
-  // Linha final com soma
-  rows.push(["", "", "", "", "", "", "TOTAL", fmtHM(totalMins), ""]);
+  bar = document.createElement("div");
+  bar.id = "selection-bar";
+  bar.className = "selection-bar show";
+  bar.innerHTML = `
+    <div class="selection-bar-inner">
+      <div class="selection-count" id="sel-count">0 selecionados</div>
+      <div class="selection-actions">
+        <button class="btn btn-ghost" id="sel-cancel" type="button">Cancelar</button>
+        <button class="btn btn-primary" id="sel-share" type="button">Compartilhar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(bar);
+}
 
-  downloadCSV(`onsite_relatorio_selecionado_${Date.now()}.csv`, rows);
+function updateSelectionUI() {
+  // highlight cards
+  document.querySelectorAll("[data-report-id]").forEach((el) => {
+    const id = el.getAttribute("data-report-id");
+    if (selectionMode && selectedIds.has(id)) el.classList.add("selected");
+    else el.classList.remove("selected");
+  });
+
+  const bar = document.getElementById("selection-bar");
+  const countEl = document.getElementById("sel-count");
+
+  if (!selectionMode) {
+    if (bar) bar.classList.remove("show");
+    return;
+  }
+
+  if (bar) bar.classList.add("show");
+  if (countEl) countEl.textContent = `${selectedIds.size} selecionado(s)`;
+}
+
+// ---------- Share (NO DOWNLOAD) ----------
+async function shareSelectedReports(reports) {
+  // monta texto
+  const payload = buildShareText(reports);
+
+  // tenta Web Share (celular)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: "OnSite Flow — Relatório",
+        text: payload
+      });
+      return;
+    } catch (e) {
+      // usuário cancelou share ou navegador bloqueou — segue pro clipboard
+    }
+  }
+
+  // fallback: copia texto (sem baixar arquivo)
+  try {
+    await navigator.clipboard.writeText(payload);
+    alert("Relatório copiado. Cole no WhatsApp/Email.");
+  } catch (e) {
+    // fallback final
+    prompt("Copie o relatório:", payload);
+  }
+}
+
+function buildShareText(reports) {
+  const lines = [];
+  lines.push("OnSite Flow — Relatório");
+  lines.push(`Pessoa: ${TEMP_USER_NAME}`);
+  lines.push("");
+
+  // ordena por data de entrada
+  const sorted = [...reports].sort((a, b) => {
+    const ai = new Date(getStartISO(a) || a.created_at).getTime();
+    const bi = new Date(getStartISO(b) || b.created_at).getTime();
+    return ai - bi;
+  });
+
+  let totalMs = 0;
+
+  for (const r of sorted) {
+    const site = getSiteName(r) || "—";
+    const inISO = getStartISO(r);
+    const outISO = getEndISO(r);
+
+    const dateLabel = formatDateLong(inISO || r.created_at);
+    const inTime = inISO ? formatTime(inISO) : "--:--";
+    const outTime = outISO ? formatTime(outISO) : "—";
+    const durMs = calcDurationMs(inISO, outISO);
+    if (durMs) totalMs += durMs;
+
+    lines.push(`${dateLabel} — ${site}`);
+    lines.push(`Entrada: ${inTime} | Saída: ${outTime} | Total: ${formatDuration(durMs)}`);
+    lines.push("");
+  }
+
+  if (sorted.length > 1) {
+    lines.push(`TOTAL (selecionados): ${formatDuration(totalMs)}`);
+  }
+
+  return lines.join("\n");
+}
+
+// ---------- Helpers / Data mapping ----------
+function findReportById(state, id) {
+  return (state.reports || []).find((r) => safeId(r) === id);
+}
+
+function safeId(r) {
+  // id pode ser number
+  return String(r?.id ?? "");
+}
+
+// tenta pegar nome do local em campos comuns
+function getSiteName(r) {
+  return (
+    r?.local_nome ??
+    r?.localNome ??
+    r?.obra ??
+    r?.site ??
+    r?.site_name ??
+    r?.nome_obra ??
+    r?.nome ??
+    ""
+  );
+}
+
+function getKindLabel(r) {
+  const t = (r?.tipo || r?.type || r?.kind || "").toString().toLowerCase();
+  if (t.includes("visit")) return "👁️ Visita Técnica";
+  if (t.includes("visita")) return "👁️ Visita Técnica";
+  return "📌 Trabalho";
+}
+
+function getStatusLabel(r) {
+  const outISO = getEndISO(r);
+  if (!outISO) return `<span class="status-pill status-open">Em andamento...</span>`;
+  return `<span class="status-pill status-done">Concluído</span>`;
+}
+
+// campos de data/hora (ajuste se precisar)
+function getStartISO(r) {
+  return (
+    r?.inicio ??
+    r?.start_time ??
+    r?.check_in ??
+    r?.checkin ??
+    r?.entrada ??
+    r?.started_at ??
+    r?.created_at ??
+    null
+  );
+}
+
+function getEndISO(r) {
+  return (
+    r?.fim ??
+    r?.end_time ??
+    r?.check_out ??
+    r?.checkout ??
+    r?.saida ??
+    r?.ended_at ??
+    null
+  );
+}
+
+function calcDurationMs(inISO, outISO) {
+  if (!inISO || !outISO) return 0;
+  const a = new Date(inISO).getTime();
+  const b = new Date(outISO).getTime();
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  const d = b - a;
+  return d > 0 ? d : 0;
+}
+
+function calcTotalLabel(inISO, outISO) {
+  const ms = calcDurationMs(inISO, outISO);
+  if (!outISO) return "—";
+  return formatDuration(ms);
+}
+
+function formatDuration(ms) {
+  if (!ms) return "0h 0m";
+  const totalMin = Math.floor(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}h ${m}m`;
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "--:--";
+  return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateShort(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function formatDateLong(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  // inclui dia da semana e dia do mês (como você pediu)
+  return d.toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
