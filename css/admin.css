@@ -1,0 +1,132 @@
+/* css/admin.css — OnSite Flow (Admin/Desktop)
+   Mais “painel profissional” (light), mantendo o laranja OnSite
+*/
+
+:root{
+  --bg:#f5f7fb;
+  --surface:#ffffff;
+  --surface-2:#fbfcff;
+
+  --text:#0f172a;
+  --muted:#64748b;
+  --line: rgba(15,23,42,0.10);
+
+  --accent:#ff9f1a;
+  --accent2:#ff7a18;
+
+  --shadow: 0 10px 30px rgba(2,6,23,0.10);
+  --r-lg:18px;
+  --r-md:14px;
+}
+
+*{ box-sizing:border-box; }
+html, body{ height:100%; }
+
+body{
+  margin:0;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+  color: var(--text);
+  background:
+    radial-gradient(1000px 600px at 0% 0%, rgba(255,159,26,0.12), transparent 55%),
+    radial-gradient(1000px 600px at 100% 0%, rgba(66,102,255,0.08), transparent 55%),
+    linear-gradient(180deg, var(--bg), var(--bg));
+}
+
+/* Make inline admin styles look better */
+.admin-shell{
+  background: transparent !important;
+}
+
+/* Left panel polish */
+.admin-panel{
+  background: rgba(255,255,255,0.85) !important;
+  backdrop-filter: blur(10px);
+  border-right: 1px solid var(--line) !important;
+}
+
+/* Card */
+.card{
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* Inputs */
+input{
+  width: 100%;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  font-weight: 700;
+  outline: none;
+  background: var(--surface-2);
+  color: var(--text);
+}
+input:focus{
+  border-color: rgba(255,122,24,0.45);
+  box-shadow: 0 0 0 4px rgba(255,159,26,0.14);
+}
+input::placeholder{ color: rgba(100,116,139,0.75); }
+
+/* Buttons (reuse your classnames) */
+.btn{
+  border:0;
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  font-weight: 900;
+  cursor:pointer;
+  transition: transform .08s ease, filter .15s ease, box-shadow .18s ease;
+}
+.btn:active{ transform: translateY(1px); }
+
+.btn-wide{ width:100%; }
+
+.btn-primary{
+  color: #10131b;
+  background: linear-gradient(180deg, var(--accent), var(--accent2));
+  box-shadow: 0 12px 26px rgba(255,122,24,0.22);
+}
+.btn-ghost{
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+/* Map container */
+#admin-map{
+  border-left: 1px solid var(--line);
+}
+
+/* Table */
+table{
+  width:100%;
+  border-collapse: collapse;
+  background: rgba(255,255,255,0.92);
+}
+thead{
+  background: rgba(255,255,255,0.98) !important;
+  border-bottom: 1px solid var(--line);
+}
+th{
+  font-size: 12px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(100,116,139,0.95);
+}
+th, td{
+  padding: 12px;
+  border-bottom: 1px solid rgba(15,23,42,0.08);
+}
+tbody tr:hover{
+  background: rgba(255,159,26,0.07);
+}
+
+/* Leaflet tweaks (admin) */
+.leaflet-control-attribution{
+  font-size: 10px !important;
+  opacity: 0.85;
+}
+.leaflet-control-zoom a{
+  border-radius: 12px !important;
+}
