@@ -1,81 +1,94 @@
 // src/core/records.js
-import { apiSelect, apiInsert, apiUpdate } from "./api.js";
-import { setWorkingUI, setTimerText } from "./ui.js";
-import { startTimer, stopTimer } from "./timer.js";
+import { supabase } from "../config.js";
 
 export async function hydrateWorkingState(state) {
-  // pega o registro aberto mais recente (saida = null)
-  const rows = await apiSelect("registros", (q) =>
-    q.is("saida", null).order("entrada", { ascending: false }).limit(1)
-  );
+  const { data, error } = await supabase
+    .from("registros")
+    .select("*")
+    .is("saida", null)
+    .order("entrada", { ascending: false })
+    .limit(1);
 
-  if (rows.length > 0) {
-    const r = rows[0];
-    state.isWorking = true;
-    state.currentRecordId = r.id;
-    state.startTime = new Date(r.entrada);
-    state.currentSite = { nome: r.local_nome };
+  if (error) {
+    console.error("hydrateWorkingState error:", error);
+    return;
+  }
 
-    setWorkingUI({ isWorking: true, siteName: r.local_nome });
-    startTimer(state, {
-      onTick: (h, m) => setTimerText(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`),
-    });
-  } else {
+  const reg = data?.[0];
+  if (!reg) {
     state.isWorking = false;
     state.currentRecordId = null;
     state.startTime = null;
-
-    setWorkingUI({ isWorking: false });
-    stopTimer(state);
+    state.currentSite = null;
+    return;
   }
+
+  state.isWorking = true;
+  state.currentRecordId = reg.id;
+  state.startTime = new Date(reg.entrada);
+  state.currentSite = { nome: reg.local_nome };
 }
 
 export async function checkIn(state, { localNome, usuario = "Usuário Teste" }) {
-  const now = new Date();
+  const entradaISO = new Date().toISOString();
 
-  const rows = await apiInsert("registros", [
-    { local_nome: localNome, usuario, entrada: now, saida: null },
-  ]);
+  const { data, error } = await supabase
+    .from("registros")
+    .insert([
+      { local_nome: localNome, usuario, entrada: entradaISO, saida: null }
+    ])
+    .select("*")
+    .limit(1);
 
-  const r = rows?.[0];
+  if (error) throw error;
+
+  const reg = data?.[0];
   state.isWorking = true;
-  state.currentRecordId = r?.id ?? null;
-  state.startTime = now;
+  state.currentRecordId = reg?.id ?? state.currentRecordId;
+  state.startTime = new Date(reg?.entrada ?? entradaISO);
   state.currentSite = { nome: localNome };
-
-  setWorkingUI({ isWorking: true, siteName: localNome });
-  startTimer(state, {
-    onTick: (h, m) => setTimerText(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`),
-  });
-
-  return r;
 }
 
 export async function checkOut(state) {
-  if (!state.currentRecordId) return null;
+  if (!state.currentRecordId) throw new Error("Sem registro ativo para encerrar.");
 
-  await apiUpdate(
-    "registros",
-    { saida: new Date() },
-    (q) => q.eq("id", state.currentRecordId)
-  );
+  const saidaISO = new Date().toISOString();
+
+  const { error } = await supabase
+    .from("registros")
+    .update({ saida: saidaISO })
+    .eq("id", state.currentRecordId);
+
+  if (error) throw error;
 
   state.isWorking = false;
   state.currentRecordId = null;
   state.startTime = null;
-
-  setWorkingUI({ isWorking: false });
-  stopTimer(state);
-
-  return true;
+  state.currentSite = null;
 }
 
 export async function visit(state, { localNome, usuario = "Usuário Teste" }) {
-  const now = new Date();
+  const t = new Date().toISOString();
 
-  await apiInsert("registros", [
-    { local_nome: localNome, usuario, entrada: now, saida: now },
-  ], false);
+  const { error } = await supabase
+    .from("registros")
+    .insert([{ local_nome: localNome, usuario, entrada: t, saida: t }]);
 
-  return true;
+  if (error) throw error;
+}
+
+export async function listRecentRecords(limit = 15) {
+  const { data, error } = await supabase
+    .from("registros")
+    .select("*")
+    .order("entrada", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function deleteRecord(id) {
+  const { error } = await supabase.from("registros").delete().eq("id", id);
+  if (error) throw error;
 }

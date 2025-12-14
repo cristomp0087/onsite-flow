@@ -1,100 +1,156 @@
 // src/core/reports.js
-import { apiSelect, apiDelete } from "./api.js";
-import { $, escapeHtml } from "./dom.js";
+import { listRecentRecords, deleteRecord } from "./records.js";
 
-export async function loadReports(state, { limit = 10 } = {}) {
-  const list = $("report-list");
+function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+
+function fmtTime(d) {
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
+function fmtDay(d) {
+  // ex: 13 dez
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+function durationHM(ms) {
+  const totalMin = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return { h, m, totalMin };
+}
+
+function buildShareText(reg) {
+  const entrada = new Date(reg.entrada);
+  const dia = fmtDay(entrada);
+
+  if (!reg.saida) {
+    return `Trabalhando em ${reg.local_nome} agora (${dia}).`;
+  }
+
+  const saida = new Date(reg.saida);
+  const ms = saida - entrada;
+  const { h, m, totalMin } = durationHM(ms);
+
+  if (totalMin <= 1) return `Visita técnica: ${reg.local_nome} — ${dia}.`;
+
+  return `Trabalho: ${reg.local_nome} — ${h}h ${m}m (${fmtTime(entrada)}–${fmtTime(saida)}) em ${dia}.`;
+}
+
+export async function loadReports(state) {
+  const list = document.getElementById("report-list");
   if (!list) return;
 
-  const rows = await apiSelect("registros", (q) =>
-    q.order("entrada", { ascending: false }).limit(limit)
-  );
+  // loading
+  list.innerHTML = `
+    <div class="empty-state">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Carregando...</p>
+    </div>
+  `;
 
-  list.innerHTML = "";
-
-  if (!rows.length) {
-    list.innerHTML = `<p style="text-align:center; color:#999; margin-top:30px">Nenhum registro ainda.</p>`;
+  let data = [];
+  try {
+    data = await listRecentRecords(15);
+  } catch (e) {
+    console.error("loadReports error:", e);
+    list.innerHTML = `<div class="empty-state"><p>Erro ao carregar relatórios.</p></div>`;
     return;
   }
 
-  rows.forEach((reg) => {
-    const div = document.createElement("div");
-    div.className = "report-card";
+  if (!data.length) {
+    list.innerHTML = `<div class="empty-state"><p>Nenhum registro ainda.</p></div>`;
+    return;
+  }
 
-    const dtIn = new Date(reg.entrada);
-    const dia = dtIn.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-    const horaIn = dtIn.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  list.innerHTML = "";
 
-    let body = "";
-    let shareTxt = "";
+  data.forEach((reg) => {
+    const entrada = new Date(reg.entrada);
+    const dia = fmtDay(entrada);
 
-    if (reg.saida) {
-      const dtOut = new Date(reg.saida);
-      const diffMin = Math.floor((dtOut - dtIn) / 60000);
+    let bodyHtml = "";
+    let shareText = buildShareText(reg);
 
-      if (diffMin <= 1) {
-        body = `<div style="color:#666; font-weight:900; font-size:0.9rem;">👁️ Visita Técnica</div>`;
-        shareTxt = `Visita Técnica: ${reg.local_nome} - ${dia}`;
-      } else {
-        const h = Math.floor(diffMin / 60);
-        const m = diffMin % 60;
-        const horaOut = dtOut.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-        body = `
-          <div style="font-weight:950; font-size:1.2rem;">${h}h ${m}m</div>
-          <div style="color:#64748b; font-size:0.85rem;">${horaIn} - ${horaOut}</div>
-        `;
-        shareTxt = `Trabalho: ${reg.local_nome} (${h}h ${m}m) em ${dia}`;
-      }
+    if (!reg.saida) {
+      bodyHtml = `
+        <div style="color:#ef4444; font-weight:950;">Em andamento…</div>
+        <div style="color:#94a3b8; font-weight:800; font-size:12px; margin-top:6px;">
+          Início: ${fmtTime(entrada)}
+        </div>
+      `;
     } else {
-      body = `<div style="color:#ef4444; font-weight:950;">Em andamento...</div>`;
-      shareTxt = `Trabalhando em ${reg.local_nome} agora.`;
+      const saida = new Date(reg.saida);
+      const ms = saida - entrada;
+      const { h, m, totalMin } = durationHM(ms);
+
+      if (totalMin <= 1) {
+        bodyHtml = `
+          <div style="font-weight:950;">👁️ Visita Técnica</div>
+          <div style="color:#94a3b8; font-weight:800; font-size:12px; margin-top:6px;">
+            ${fmtTime(entrada)}
+          </div>
+        `;
+      } else {
+        bodyHtml = `
+          <div style="font-weight:950; font-size:18px;">${h}h ${m}m</div>
+          <div style="color:#94a3b8; font-weight:800; font-size:12px; margin-top:6px;">
+            ${fmtTime(entrada)} — ${fmtTime(saida)}
+          </div>
+        `;
+      }
     }
 
-    div.innerHTML = `
+    const card = document.createElement("div");
+    card.className = "report-card";
+    card.innerHTML = `
       <div class="report-header">
-        <span>${escapeHtml(reg.local_nome || "-")}</span>
-        <span style="color:#64748b; font-weight:800">${dia}</span>
+        <span>${reg.local_nome}</span>
+        <span style="color:#94a3b8; font-weight:900;">${dia}</span>
       </div>
 
-      ${body}
+      ${bodyHtml}
 
       <div class="card-actions">
-        <button class="action-btn-small" data-del="${reg.id}">🗑️</button>
-        <button class="action-btn-small" data-share="${encodeURIComponent(shareTxt)}">📤</button>
+        <button class="action-btn-small" data-action="delete" data-id="${reg.id}">🗑️</button>
+        <button class="action-btn-small" data-action="share" data-share="${encodeURIComponent(shareText)}">📤</button>
       </div>
     `;
+    list.appendChild(card);
+  });
 
-    div.querySelector("[data-del]")?.addEventListener("click", async () => {
-      const id = Number(div.querySelector("[data-del]").dataset.del);
+  // Delegação de eventos
+  list.onclick = async (ev) => {
+    const btn = ev.target?.closest("button");
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    if (action === "delete") {
+      const id = Number(btn.dataset.id);
+      if (!id) return;
       if (!confirm("Apagar este registro?")) return;
 
       try {
-        await apiDelete("registros", (q) => q.eq("id", id));
-        await loadReports(state, { limit });
+        await deleteRecord(id);
+        await loadReports(state);
       } catch (e) {
-        alert("Erro ao apagar: " + e.message);
+        alert("Erro ao apagar: " + (e?.message ?? e));
       }
-    });
-
-    div.querySelector("[data-share]")?.addEventListener("click", async () => {
-      const txt = decodeURIComponent(div.querySelector("[data-share]").dataset.share || "");
-      await shareText(txt);
-    });
-
-    list.appendChild(div);
-  });
-}
-
-async function shareText(txt) {
-  try {
-    if (navigator.share) {
-      await navigator.share({ title: "OnSite", text: txt });
-    } else {
-      await navigator.clipboard.writeText(txt);
-      alert("Texto copiado!");
     }
-  } catch (e) {
-    console.warn(e);
-  }
+
+    if (action === "share") {
+      const text = decodeURIComponent(btn.dataset.share || "");
+      if (!text) return;
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: "OnSite Flow", text });
+        } catch {}
+      } else {
+        await navigator.clipboard.writeText(text);
+        alert("Texto copiado!");
+      }
+    }
+  };
 }
