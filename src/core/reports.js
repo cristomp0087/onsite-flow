@@ -6,7 +6,7 @@ import { supabase } from "../config.js";
  * - Nome da tabela
  * - Nome da coluna de "created_at" se for diferente
  */
-const TABLE = "records";
+const TABLE = "registros";
 const ORDER_COL = "created_at";
 const LIMIT = 80;
 
