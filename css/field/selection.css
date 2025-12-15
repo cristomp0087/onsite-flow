@@ -1,0 +1,60 @@
+/* css/field/selection.css — seleção múltipla */
+
+.select-pill{
+  position:absolute;
+  top: 12px;
+  left: 12px;
+  font-weight: 950;
+  font-size: 11px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255,159,26,0.14);
+  border: 1px solid rgba(255,159,26,0.24);
+  color: rgba(255,214,156,0.95);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity .15s ease, transform .15s ease;
+  pointer-events:none;
+}
+
+.report-card.selected{
+  outline: 2px solid rgba(255,159,26,0.55);
+  box-shadow: 0 0 0 1px rgba(255,159,26,0.22), 0 18px 60px rgba(255,122,24,0.14);
+  transform: translateY(-1px);
+}
+.report-card.selected .select-pill{
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.selection-bar{
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));
+  z-index: 9999;
+  display: none;
+}
+.selection-bar.show{ display:block; }
+
+.selection-bar-inner{
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(15,23,42,0.86), rgba(10,15,30,0.92));
+  backdrop-filter: blur(12px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.selection-count{
+  font-weight: 950;
+  color: rgba(231,237,246,0.92);
+}
+.selection-actions{
+  display:flex;
+  gap: 10px;
+}

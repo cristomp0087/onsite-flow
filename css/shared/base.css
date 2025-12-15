@@ -1,0 +1,9 @@
+/* css/shared/base.css — reset/base neutro (serve field e admin) */
+*{ box-sizing:border-box; }
+html, body{ height:100%; }
+
+body{
+  margin:0;
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+  color: var(--text);
+}

@@ -1,0 +1,113 @@
+/* css/field/reports.css — lista e cards */
+
+.report-list{ margin-top: 10px; }
+
+.report-card{
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.10);
+  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+  box-shadow: 0 12px 36px rgba(0,0,0,0.30);
+  padding: 14px 14px 12px;
+  margin-bottom: 12px;
+}
+
+.report-header{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-weight: 950;
+  color: rgba(231,237,246,0.95);
+}
+
+.card-actions{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.10);
+  display:flex;
+  justify-content:flex-end;
+  gap:10px;
+}
+
+.action-btn-small{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
+  padding: 8px 10px;
+  font-size: 16px;
+  cursor:pointer;
+  color: rgba(231,237,246,0.9);
+}
+
+.report-card.selectable{ position: relative; }
+
+.report-top{
+  display:flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.report-person{
+  font-weight: 950;
+  font-size: 16px;
+  color: rgba(231,237,246,0.96);
+}
+.report-date{
+  font-weight: 900;
+  font-size: 12px;
+  color: rgba(154,168,190,0.9);
+}
+
+.report-mid{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.report-site{
+  font-weight: 950;
+  font-size: 14px;
+  color: rgba(231,237,246,0.92);
+  overflow:hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 70%;
+}
+
+.report-line{
+  display:flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0 2px;
+}
+.report-io{
+  font-weight: 900;
+  color: rgba(231,237,246,0.82);
+  font-size: 13px;
+}
+.report-total{
+  font-weight: 950;
+  font-size: 14px;
+  color: rgba(231,237,246,0.96);
+  font-variant-numeric: tabular-nums;
+}
+
+/* pills de status (se você usa nos cards) */
+.status-pill{
+  display:inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  margin-left: 8px;
+}
+.status-open{
+  background: rgba(255,159,26,0.14);
+  color: rgba(255,214,156,0.95);
+  border: 1px solid rgba(255,159,26,0.18);
+}
+.status-done{
+  background: rgba(45,211,111,0.14);
+  color: rgba(220,255,235,0.95);
+  border: 1px solid rgba(45,211,111,0.18);
+}

@@ -1,0 +1,30 @@
+/* css/field/theme.css — tokens dark (field) */
+:root{
+  --bg0:#070b14;
+  --bg1:#0b1220;
+
+  --panelA: rgba(15, 23, 42, 0.86);
+  --panelB: rgba(18, 28, 52, 0.74);
+
+  --text:#e7edf6;
+  --muted:#9aa8be;
+  --line: rgba(231, 237, 246, 0.12);
+
+  --accent:#ff9f1a;
+  --accent2:#ff7a18;
+
+  --danger:#ff4b4b;
+  --success:#2dd36f;
+
+  --r-xl:26px;
+  --r-lg:22px;
+  --r-md:16px;
+
+  --nav-h:76px;
+  --maxw:620px;
+
+  --header-pad-top: max(10px, env(safe-area-inset-top));
+  --header-gap: 12px;
+}
+
+:root { color-scheme: dark; }

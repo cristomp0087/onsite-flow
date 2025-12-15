@@ -1,0 +1,83 @@
+/* css/field/status.css — gps bar + status + geofence alert */
+
+.gps-bar{
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 12px;
+  text-align:center;
+  padding: 10px 12px;
+  background: rgba(255,159,26,0.14);
+  color: rgba(255,214,156,0.95);
+  border-bottom: 1px solid rgba(255,159,26,0.16);
+}
+.gps-bar.active{
+  background: rgba(45,211,111,0.14);
+  color: rgba(220,255,235,0.95);
+  border-bottom-color: rgba(45,211,111,0.18);
+}
+.gps-bar.error{
+  background: rgba(255,75,75,0.14);
+  color: rgba(255,225,225,0.95);
+  border-bottom-color: rgba(255,75,75,0.18);
+}
+
+.status-content{ padding: 16px 14px 18px; text-align:center; }
+.status-title{
+  margin: 2px 0 8px;
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.status-time{
+  font-weight: 950;
+  font-size: 58px;
+  line-height: 1.05;
+  margin: 6px 0 12px;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 10px 40px rgba(0,0,0,0.35);
+}
+.status-location{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(231,237,246,0.92);
+  font-weight: 900;
+}
+
+/* geofence alert */
+.geo-alert{
+  position:absolute;
+  top: calc(var(--header-pad-top) + 10px);
+  left: 14px; right: 14px;
+  z-index: 3000;
+  display:none;
+}
+.geo-alert-body{
+  border-radius: var(--r-lg);
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(180deg, rgba(15,23,42,0.92), rgba(10,15,30,0.88));
+  box-shadow: 0 18px 60px rgba(0,0,0,0.45);
+  backdrop-filter: blur(12px);
+  padding: 16px 14px 14px;
+  animation: slideDown .22s ease;
+}
+.geo-title{ margin:0 0 6px; font-weight: 950; }
+.geo-msg{ margin:0 0 12px; color: rgba(231,237,246,0.78); }
+.geo-actions{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+@keyframes slideDown{
+  from{ transform: translateY(-10px); opacity:0; }
+  to{ transform: translateY(0); opacity:1; }
+}
+
+
+/* DEBUG: se isso “ressuscitar” o app, era pointer-events */
+.btn-big{ pointer-events: auto !important; opacity: 1 !important; }

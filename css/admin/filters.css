@@ -1,0 +1,18 @@
+/* css/admin/filters.css — filtros (opcional) */
+/* Se tiver container de filtros, coloca aqui depois */
+/* css/admin/filters.css — inputs/filtros (se usar) */
+input{
+  width: 100%;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  font-weight: 700;
+  outline: none;
+  background: var(--surface-2);
+  color: var(--text);
+}
+input:focus{
+  border-color: rgba(255,122,24,0.45);
+  box-shadow: 0 0 0 4px rgba(255,159,26,0.14);
+}
+input::placeholder{ color: rgba(100,116,139,0.75); }

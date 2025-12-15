@@ -1,0 +1,8 @@
+/* css/admin/maps.css — leaflet tweaks (admin) */
+.leaflet-control-attribution{
+  font-size: 10px !important;
+  opacity: 0.85;
+}
+.leaflet-control-zoom a{
+  border-radius: 12px !important;
+}
