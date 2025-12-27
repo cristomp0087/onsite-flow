@@ -1,0 +1,10 @@
+{
+  "name": "@onsite/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Mobile app será configurado no Checkpoint 2'",
+    "lint": "echo 'Mobile app será configurado no Checkpoint 2'",
+    "typecheck": "echo 'Mobile app será configurado no Checkpoint 2'"
+  }
+}

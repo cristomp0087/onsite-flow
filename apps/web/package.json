@@ -1,0 +1,10 @@
+{
+  "name": "@onsite/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Web app será configurado no Checkpoint 6'",
+    "lint": "echo 'Web app será configurado no Checkpoint 6'",
+    "typecheck": "echo 'Web app será configurado no Checkpoint 6'"
+  }
+}
