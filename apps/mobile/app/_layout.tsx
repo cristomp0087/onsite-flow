@@ -3,16 +3,22 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuthStore } from '../src/stores/authStore';
+import { useRegistroStore } from '../src/stores/registroStore';
+import { useWorkSessionStore } from '../src/stores/workSessionStore';
 import { DevMonitor } from '../src/components/DevMonitor';
 import { logger } from '../src/lib/logger';
 import { colors } from '../src/constants/colors';
 
 export default function RootLayout() {
-  const { initialize, isLoading } = useAuthStore();
+  const { initialize: initAuth, isLoading } = useAuthStore();
+  const { initialize: initRegistros } = useRegistroStore();
+  const { initialize: initWorkSession } = useWorkSessionStore();
   
   useEffect(() => {
     logger.info('auth', 'App starting...');
-    initialize();
+    initAuth();
+    initRegistros();
+    initWorkSession();
   }, []);
   
   if (isLoading) {

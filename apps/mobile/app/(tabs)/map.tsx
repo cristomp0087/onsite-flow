@@ -1,248 +1,387 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  Alert,
-  ScrollView,
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
   TextInput,
   Modal,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocation, useGeofences, useCurrentLocation } from '../../src/hooks/useLocation';
-import { Button } from '../../src/components/ui/Button';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useLocationStore, type LocalDeTrabalho } from '../../src/stores/locationStore';
+import { searchAddress, reverseGeocode, type GeocodingResult } from '../../src/lib/geocoding';
 import { colors } from '../../src/constants/colors';
-import { formatDistance, calculateDistance } from '../../src/lib/location';
+import { logger } from '../../src/lib/logger';
+import { Button } from '../../src/components/ui/Button';
 
 export default function MapScreen() {
-  const { hasPermission, hasBackgroundPermission, isWatching, startTracking, stopTracking } = useLocation();
-  const { location, accuracy, refresh } = useCurrentLocation();
-  const { locais, activeLocal, isMonitoring, addLocal, removeLocal, startMonitoring, stopMonitoring } = useGeofences();
-  
+  const {
+    initialize,
+    currentLocation,
+    accuracy,
+    refreshLocation,
+    locais,
+    addLocal,
+    removeLocal,
+    activeGeofence,
+    isGeofencingActive,
+    startGeofenceMonitoring,
+    stopGeofenceMonitoring,
+    hasPermission,
+    hasBackgroundPermission,
+  } = useLocationStore();
+
+  const mapRef = useRef<MapView>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newLocalName, setNewLocalName] = useState('');
   const [newLocalRaio, setNewLocalRaio] = useState('50');
-  
-  // Inicializar ao montar
+  const [selectedLocation, setSelectedLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    address?: string;
+  } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [locationType, setLocationType] = useState<'current' | 'search' | 'map'>('current');
+
   useEffect(() => {
-    refresh();
+    initialize();
   }, []);
-  
-  const handleAddLocal = () => {
-    if (!location) {
-      Alert.alert('Erro', 'Aguarde obter sua localização primeiro');
-      return;
-    }
+
+  // Buscar endereço
+  const handleSearch = async () => {
+    if (searchQuery.length < 3) return;
     
+    setIsSearching(true);
+    try {
+      const results = await searchAddress(searchQuery);
+      setSearchResults(results);
+    } catch (error) {
+      logger.error('map', 'Search error', { error });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Selecionar resultado da busca
+  const selectSearchResult = (result: GeocodingResult) => {
+    setSelectedLocation({
+      latitude: result.latitude,
+      longitude: result.longitude,
+      address: result.address,
+    });
+    setSearchResults([]);
+    setSearchQuery('');
+    setLocationType('search');
+    
+    // Mover mapa para o local
+    mapRef.current?.animateToRegion({
+      latitude: result.latitude,
+      longitude: result.longitude,
+      latitudeDelta: 0.005,
+      longitudeDelta: 0.005,
+    }, 500);
+  };
+
+  // Selecionar ponto no mapa
+  const handleMapPress = async (event: any) => {
+    const { latitude, longitude } = event.nativeEvent.coordinate;
+    
+    // Buscar endereço do ponto
+    const address = await reverseGeocode(latitude, longitude);
+    
+    setSelectedLocation({
+      latitude,
+      longitude,
+      address: address || undefined,
+    });
+    setLocationType('map');
+  };
+
+  // Usar localização atual
+  const useCurrentLocation = () => {
+    if (currentLocation) {
+      setSelectedLocation({
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+      });
+      setLocationType('current');
+    }
+  };
+
+  // Abrir modal de adicionar
+  const openAddModal = () => {
+    useCurrentLocation();
+    setNewLocalName('');
+    setNewLocalRaio('50');
+    setShowAddModal(true);
+  };
+
+  // Salvar novo local
+  const handleSaveLocal = () => {
     if (!newLocalName.trim()) {
       Alert.alert('Erro', 'Digite um nome para o local');
       return;
     }
     
+    if (!selectedLocation) {
+      Alert.alert('Erro', 'Selecione uma localização');
+      return;
+    }
+    
+    const raio = parseInt(newLocalRaio) || 50;
+    
     addLocal({
       nome: newLocalName.trim(),
-      latitude: location.latitude,
-      longitude: location.longitude,
-      raio: parseInt(newLocalRaio) || 50,
-      cor: `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`,
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      raio,
+      cor: getRandomColor(),
       ativo: true,
     });
     
-    setNewLocalName('');
-    setNewLocalRaio('50');
     setShowAddModal(false);
+    setNewLocalName('');
+    setSelectedLocation(null);
     
-    Alert.alert('Sucesso', 'Local adicionado! Ative o monitoramento para começar.');
+    Alert.alert('Sucesso', 'Local adicionado!');
   };
-  
-  const handleToggleMonitoring = async () => {
-    if (isMonitoring) {
-      await stopMonitoring();
-    } else {
-      if (locais.length === 0) {
-        Alert.alert('Erro', 'Adicione pelo menos um local primeiro');
-        return;
-      }
-      await startMonitoring();
-    }
+
+  // Deletar local
+  const handleDeleteLocal = (local: LocalDeTrabalho) => {
+    Alert.alert(
+      'Remover Local',
+      `Deseja remover "${local.nome}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Remover', 
+          style: 'destructive',
+          onPress: () => removeLocal(local.id),
+        },
+      ]
+    );
   };
-  
+
+  const getRandomColor = () => {
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+    return colors[Math.floor(Math.random() * colors.length)];
+  };
+
+  const activeLocal = locais.find(l => l.id === activeGeofence);
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>🗺️ Mapa</Text>
-          <Text style={styles.subtitle}>Gerencie seus locais de trabalho</Text>
-        </View>
-        
-        {/* Status de Permissões */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>📱 Permissões</Text>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>GPS (foreground):</Text>
-            <Text style={[styles.statusValue, hasPermission ? styles.statusOk : styles.statusNo]}>
-              {hasPermission ? '✅ Permitido' : '❌ Negado'}
-            </Text>
-          </View>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>GPS (background):</Text>
-            <Text style={[styles.statusValue, hasBackgroundPermission ? styles.statusOk : styles.statusNo]}>
-              {hasBackgroundPermission ? '✅ Permitido' : '⚠️ Não solicitado'}
-            </Text>
-          </View>
-        </View>
-        
-        {/* Localização Atual */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>📍 Sua Localização</Text>
-          {location ? (
-            <>
-              <Text style={styles.coordText}>
-                Lat: {location.latitude.toFixed(6)}
-              </Text>
-              <Text style={styles.coordText}>
-                Lng: {location.longitude.toFixed(6)}
-              </Text>
-              {accuracy && (
-                <Text style={styles.accuracyText}>
-                  Precisão: ~{accuracy.toFixed(0)}m
-                </Text>
-              )}
-            </>
-          ) : (
-            <Text style={styles.noDataText}>Obtendo localização...</Text>
-          )}
-          
-          <View style={styles.buttonRow}>
-            <Button 
-              title="🔄 Atualizar" 
-              onPress={refresh}
-              variant="outline"
-              style={styles.smallButton}
-            />
-            <Button 
-              title={isWatching ? "⏹️ Parar" : "▶️ Tempo Real"} 
-              onPress={isWatching ? stopTracking : startTracking}
-              variant={isWatching ? "secondary" : "primary"}
-              style={styles.smallButton}
-            />
-          </View>
-        </View>
-        
-        {/* Geofence Ativo */}
-        {activeLocal && (
-          <View style={[styles.card, styles.activeCard]}>
-            <Text style={styles.cardTitle}>🎯 VOCÊ ESTÁ EM:</Text>
-            <Text style={styles.activeLocalName}>{activeLocal.nome}</Text>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Mapa */}
+      <View style={styles.mapContainer}>
+        {currentLocation ? (
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            provider={PROVIDER_GOOGLE}
+            initialRegion={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            showsUserLocation
+            showsMyLocationButton
+            onPress={handleMapPress}
+          >
+            {/* Círculos dos geofences */}
+            {locais.map((local) => (
+              <React.Fragment key={local.id}>
+                <Circle
+                  center={{ latitude: local.latitude, longitude: local.longitude }}
+                  radius={local.raio}
+                  fillColor={`${local.cor}30`}
+                  strokeColor={local.cor}
+                  strokeWidth={2}
+                />
+                <Marker
+                  coordinate={{ latitude: local.latitude, longitude: local.longitude }}
+                  title={local.nome}
+                  description={`Raio: ${local.raio}m`}
+                  pinColor={local.cor}
+                />
+              </React.Fragment>
+            ))}
+            
+            {/* Marcador de seleção */}
+            {selectedLocation && (
+              <Marker
+                coordinate={selectedLocation}
+                pinColor="#FF6B6B"
+                title="Local selecionado"
+              />
+            )}
+          </MapView>
+        ) : (
+          <View style={styles.loadingMap}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Carregando mapa...</Text>
           </View>
         )}
         
-        {/* Lista de Locais */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>📋 Locais ({locais.length})</Text>
-            <TouchableOpacity onPress={() => setShowAddModal(true)}>
-              <Text style={styles.addButton}>+ Adicionar</Text>
-            </TouchableOpacity>
+        {/* Status overlay */}
+        {activeLocal && (
+          <View style={styles.statusOverlay}>
+            <Text style={styles.statusText}>🎯 Você está em: {activeLocal.nome}</Text>
           </View>
-          
-          {locais.length === 0 ? (
-            <Text style={styles.noDataText}>
-              Nenhum local cadastrado.{'\n'}
-              Toque em "+ Adicionar" para criar um local na sua posição atual.
-            </Text>
-          ) : (
-            locais.map((local) => {
-              const distance = location 
-                ? calculateDistance(location, { latitude: local.latitude, longitude: local.longitude })
-                : null;
-              
-              return (
+        )}
+      </View>
+      
+      {/* Painel inferior */}
+      <View style={styles.panel}>
+        <ScrollView>
+          {/* Locais */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>📍 Locais ({locais.length})</Text>
+              <TouchableOpacity onPress={openAddModal}>
+                <Text style={styles.addButton}>+ Adicionar</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {locais.length === 0 ? (
+              <Text style={styles.emptyText}>Nenhum local cadastrado</Text>
+            ) : (
+              locais.map((local) => (
                 <View key={local.id} style={styles.localItem}>
-                  <View style={[styles.localColor, { backgroundColor: local.cor }]} />
+                  <View style={[styles.localDot, { backgroundColor: local.cor }]} />
                   <View style={styles.localInfo}>
                     <Text style={styles.localName}>{local.nome}</Text>
-                    <Text style={styles.localDetails}>
-                      Raio: {local.raio}m
-                      {distance !== null && ` • ${formatDistance(distance)} de distância`}
-                    </Text>
+                    <Text style={styles.localDetails}>Raio: {local.raio}m</Text>
                   </View>
-                  <TouchableOpacity 
-                    onPress={() => {
-                      Alert.alert(
-                        'Remover Local',
-                        `Deseja remover "${local.nome}"?`,
-                        [
-                          { text: 'Cancelar', style: 'cancel' },
-                          { text: 'Remover', style: 'destructive', onPress: () => removeLocal(local.id) },
-                        ]
-                      );
-                    }}
-                  >
-                    <Text style={styles.removeButton}>🗑️</Text>
+                  <TouchableOpacity onPress={() => handleDeleteLocal(local)}>
+                    <Text style={styles.deleteButton}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
-              );
-            })
-          )}
-        </View>
-        
-        {/* Controle de Monitoramento */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>🔔 Monitoramento</Text>
-          <Text style={styles.monitoringStatus}>
-            Status: {isMonitoring ? '🟢 Ativo' : '⚫ Inativo'}
-          </Text>
-          <Button
-            title={isMonitoring ? '⏹️ Parar Monitoramento' : '▶️ Iniciar Monitoramento'}
-            onPress={handleToggleMonitoring}
-            variant={isMonitoring ? 'secondary' : 'primary'}
-            disabled={locais.length === 0}
-          />
-          {locais.length === 0 && (
-            <Text style={styles.hintText}>
-              Adicione locais acima para poder monitorar
+              ))
+            )}
+          </View>
+          
+          {/* Monitoramento */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🔔 Monitoramento</Text>
+            <Text style={styles.statusLabel}>
+              Status: {isGeofencingActive ? '🟢 Ativo' : '⚫ Inativo'}
             </Text>
-          )}
-        </View>
-        
-        <View style={{ height: 100 }} />
-      </ScrollView>
+            
+            <Button
+              title={isGeofencingActive ? '⏹️ Parar' : '▶️ Iniciar Monitoramento'}
+              onPress={isGeofencingActive ? stopGeofenceMonitoring : startGeofenceMonitoring}
+              variant={isGeofencingActive ? 'secondary' : 'primary'}
+              disabled={locais.length === 0}
+            />
+          </View>
+        </ScrollView>
+      </View>
       
       {/* Modal Adicionar Local */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
+      <Modal visible={showAddModal} animationType="slide" transparent>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>➕ Adicionar Local</Text>
+            <Text style={styles.modalTitle}>📍 Adicionar Local</Text>
             
-            <Text style={styles.inputLabel}>Nome do Local</Text>
+            {/* Opções de localização */}
+            <View style={styles.locationOptions}>
+              <TouchableOpacity
+                style={[styles.locationOption, locationType === 'current' && styles.locationOptionActive]}
+                onPress={useCurrentLocation}
+              >
+                <Text style={styles.locationOptionText}>📍 Local atual</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.locationOption, locationType === 'search' && styles.locationOptionActive]}
+                onPress={() => setLocationType('search')}
+              >
+                <Text style={styles.locationOptionText}>🔍 Buscar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.locationOption, locationType === 'map' && styles.locationOptionActive]}
+                onPress={() => setLocationType('map')}
+              >
+                <Text style={styles.locationOptionText}>🗺️ No mapa</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {/* Busca de endereço */}
+            {locationType === 'search' && (
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Digite o endereço..."
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onSubmitEditing={handleSearch}
+                />
+                <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+                  <Text style={styles.searchButtonText}>🔍</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            
+            {/* Resultados da busca */}
+            {isSearching && <ActivityIndicator style={{ marginVertical: 10 }} />}
+            {searchResults.length > 0 && (
+              <ScrollView style={styles.searchResults}>
+                {searchResults.map((result, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.searchResultItem}
+                    onPress={() => selectSearchResult(result)}
+                  >
+                    <Text style={styles.searchResultText} numberOfLines={2}>
+                      {result.address}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+            
+            {/* Local selecionado */}
+            {selectedLocation && (
+              <View style={styles.selectedLocation}>
+                <Text style={styles.selectedLocationLabel}>Local selecionado:</Text>
+                <Text style={styles.selectedLocationText}>
+                  {selectedLocation.address || 
+                   `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`}
+                </Text>
+              </View>
+            )}
+            
+            {/* Nome do local */}
             <TextInput
               style={styles.input}
-              placeholder="Ex: Escritório, Obra, Cliente"
+              placeholder="Nome do local (ex: Escritório)"
               value={newLocalName}
               onChangeText={setNewLocalName}
             />
             
-            <Text style={styles.inputLabel}>Raio (metros)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="50"
-              value={newLocalRaio}
-              onChangeText={setNewLocalRaio}
-              keyboardType="number-pad"
-            />
+            {/* Raio */}
+            <View style={styles.raioContainer}>
+              <Text style={styles.raioLabel}>Raio (metros):</Text>
+              <TextInput
+                style={styles.raioInput}
+                keyboardType="numeric"
+                value={newLocalRaio}
+                onChangeText={setNewLocalRaio}
+              />
+            </View>
             
-            <Text style={styles.modalHint}>
-              📍 O local será criado na sua posição atual
-            </Text>
-            
+            {/* Botões */}
             <View style={styles.modalButtons}>
               <Button
                 title="Cancelar"
@@ -251,13 +390,14 @@ export default function MapScreen() {
                 style={{ flex: 1, marginRight: 8 }}
               />
               <Button
-                title="Adicionar"
-                onPress={handleAddLocal}
+                title="Salvar"
+                onPress={handleSaveLocal}
                 style={{ flex: 1, marginLeft: 8 }}
+                disabled={!newLocalName.trim() || !selectedLocation}
               />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -266,110 +406,82 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.backgroundSecondary,
+    backgroundColor: colors.background,
   },
-  scrollView: {
+  mapContainer: {
     flex: 1,
   },
-  header: {
-    padding: 16,
-    backgroundColor: colors.background,
+  map: {
+    flex: 1,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text,
+  loadingMap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.backgroundSecondary,
   },
-  subtitle: {
-    fontSize: 14,
+  loadingText: {
+    marginTop: 12,
     color: colors.textSecondary,
-    marginTop: 4,
   },
-  card: {
-    backgroundColor: colors.background,
-    margin: 16,
-    marginBottom: 0,
-    padding: 16,
-    borderRadius: 12,
-  },
-  activeCard: {
+  statusOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
     backgroundColor: '#DCFCE7',
-    borderWidth: 2,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
     borderColor: colors.success,
   },
-  cardHeader: {
+  statusText: {
+    color: colors.success,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  panel: {
+    maxHeight: '40%',
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  section: {
+    marginBottom: 16,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  cardTitle: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 12,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  statusLabel: {
-    color: colors.textSecondary,
-  },
-  statusValue: {
-    fontWeight: '500',
-  },
-  statusOk: {
-    color: colors.success,
-  },
-  statusNo: {
-    color: colors.warning,
-  },
-  coordText: {
-    fontFamily: 'monospace',
-    fontSize: 14,
-    color: colors.text,
-    marginBottom: 4,
-  },
-  accuracyText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  noDataText: {
-    color: colors.textTertiary,
-    fontStyle: 'italic',
-    textAlign: 'center',
-    padding: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    marginTop: 12,
-    gap: 8,
-  },
-  smallButton: {
-    flex: 1,
-    paddingVertical: 10,
-  },
-  activeLocalName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.success,
-    textAlign: 'center',
   },
   addButton: {
     color: colors.primary,
     fontWeight: '600',
   },
+  emptyText: {
+    color: colors.textSecondary,
+    fontStyle: 'italic',
+  },
   localItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  localColor: {
+  localDot: {
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -379,68 +491,137 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   localName: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: colors.text,
   },
   localDetails: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 2,
   },
-  removeButton: {
-    fontSize: 20,
-    padding: 8,
+  deleteButton: {
+    fontSize: 18,
+    padding: 4,
   },
-  monitoringStatus: {
-    fontSize: 16,
+  statusLabel: {
+    color: colors.textSecondary,
     marginBottom: 12,
-    color: colors.text,
   },
-  hintText: {
-    fontSize: 12,
-    color: colors.textTertiary,
-    marginTop: 8,
-    textAlign: 'center',
-  },
+  // Modal styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 24,
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 20,
+    marginBottom: 16,
     textAlign: 'center',
   },
-  inputLabel: {
-    fontSize: 14,
+  locationOptions: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    gap: 8,
+  },
+  locationOption: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: colors.backgroundSecondary,
+    alignItems: 'center',
+  },
+  locationOptionActive: {
+    backgroundColor: colors.primary,
+  },
+  locationOptionText: {
+    fontSize: 12,
     fontWeight: '500',
     color: colors.text,
-    marginBottom: 6,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+  },
+  searchButton: {
+    marginLeft: 8,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    padding: 12,
+    justifyContent: 'center',
+  },
+  searchButtonText: {
+    fontSize: 18,
+  },
+  searchResults: {
+    maxHeight: 150,
+    marginBottom: 12,
+  },
+  searchResultItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  searchResultText: {
+    fontSize: 13,
+    color: colors.text,
+  },
+  selectedLocation: {
+    backgroundColor: colors.backgroundSecondary,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  selectedLocationLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  selectedLocationText: {
+    fontSize: 13,
+    color: colors.text,
   },
   input: {
-    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    marginBottom: 12,
+  },
+  raioContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  raioLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginRight: 12,
+  },
+  raioInput: {
     borderWidth: 1,
     borderColor: colors.border,
-  },
-  modalHint: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    borderRadius: 8,
+    padding: 8,
+    width: 80,
     textAlign: 'center',
-    marginBottom: 20,
   },
   modalButtons: {
     flexDirection: 'row',
