@@ -1,3 +1,11 @@
+/**
+ * Tipos do Banco de Dados - OnSite Flow Web
+ * 
+ * Alinhado com estrutura do Supabase
+ * 
+ * Localização: apps/web/src/types/database.ts
+ */
+
 export type Database = {
   public: {
     Tables: {
@@ -39,49 +47,75 @@ export type Database = {
           updated_at?: string;
         };
       };
-      sessoes: {
+      registros: {
         Row: {
           id: string;
           user_id: string;
           local_id: string;
           local_nome: string | null;
-          inicio: string;
-          fim: string | null;
-          duracao_minutos: number | null;
-          status: 'ativa' | 'pausada' | 'finalizada';
-          tempo_pausado_minutos: number | null;
-          coords_entrada: any | null;
-          coords_saida: any | null;
+          entrada: string;
+          saida: string | null;
+          tipo: string;
+          editado_manualmente: boolean;
+          motivo_edicao: string | null;
+          hash_integridade: string | null;
+          cor: string | null;
+          device_id: string | null;
           created_at: string;
-          updated_at: string;
+          synced_at: string | null;
         };
         Insert: {
           id?: string;
           user_id: string;
           local_id: string;
           local_nome?: string | null;
-          inicio: string;
-          fim?: string | null;
-          duracao_minutos?: number | null;
-          status?: 'ativa' | 'pausada' | 'finalizada';
-          tempo_pausado_minutos?: number | null;
-          coords_entrada?: any | null;
-          coords_saida?: any | null;
+          entrada: string;
+          saida?: string | null;
+          tipo?: string;
+          editado_manualmente?: boolean;
+          motivo_edicao?: string | null;
+          hash_integridade?: string | null;
+          cor?: string | null;
+          device_id?: string | null;
           created_at?: string;
-          updated_at?: string;
+          synced_at?: string | null;
         };
         Update: {
           id?: string;
           user_id?: string;
           local_id?: string;
           local_nome?: string | null;
-          inicio?: string;
-          fim?: string | null;
-          duracao_minutos?: number | null;
-          status?: 'ativa' | 'pausada' | 'finalizada';
-          tempo_pausado_minutos?: number | null;
-          coords_entrada?: any | null;
-          coords_saida?: any | null;
+          entrada?: string;
+          saida?: string | null;
+          tipo?: string;
+          editado_manualmente?: boolean;
+          motivo_edicao?: string | null;
+          hash_integridade?: string | null;
+          cor?: string | null;
+          device_id?: string | null;
+          created_at?: string;
+          synced_at?: string | null;
+        };
+      };
+      profiles: {
+        Row: {
+          id: string;
+          email: string | null;
+          nome: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          email?: string | null;
+          nome?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          email?: string | null;
+          nome?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -92,5 +126,38 @@ export type Database = {
 
 // Tipos auxiliares
 export type Local = Database['public']['Tables']['locais']['Row'];
-export type Sessao = Database['public']['Tables']['sessoes']['Row'];
-export type SessaoStatus = 'ativa' | 'pausada' | 'finalizada';
+export type Registro = Database['public']['Tables']['registros']['Row'];
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+
+// Alias para compatibilidade (sessao = registro)
+export type Sessao = Registro & {
+  // Mapeamento de campos para compatibilidade
+  inicio: string; // = entrada
+  fim: string | null; // = saida
+  duracao_minutos: number | null; // calculado
+  status: 'ativa' | 'pausada' | 'finalizada'; // calculado
+};
+
+// Helper para converter Registro em Sessao
+export function registroToSessao(registro: Registro): Sessao {
+  const entrada = new Date(registro.entrada);
+  const saida = registro.saida ? new Date(registro.saida) : null;
+  
+  let duracao_minutos: number | null = null;
+  if (saida) {
+    duracao_minutos = Math.round((saida.getTime() - entrada.getTime()) / 60000);
+  }
+  
+  let status: 'ativa' | 'pausada' | 'finalizada' = 'ativa';
+  if (registro.saida) {
+    status = 'finalizada';
+  }
+  
+  return {
+    ...registro,
+    inicio: registro.entrada,
+    fim: registro.saida,
+    duracao_minutos,
+    status,
+  };
+}

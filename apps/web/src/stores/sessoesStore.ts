@@ -1,6 +1,15 @@
+/**
+ * Store de Sessões/Registros - OnSite Flow Web
+ * 
+ * Atualizado para usar tabela 'registros' do Supabase
+ * 
+ * Localização: apps/web/src/stores/sessoesStore.ts
+ */
+
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
-import type { Sessao, Local } from '@/types/database';
+import type { Registro, Local, Sessao } from '@/types/database';
+import { registroToSessao } from '@/types/database';
 import { startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays } from 'date-fns';
 
 interface Filtros {
@@ -18,7 +27,12 @@ interface Estatisticas {
 }
 
 interface SessoesState {
+  // Dados brutos do Supabase
+  registros: Registro[];
+  
+  // Dados convertidos para compatibilidade
   sessoes: Sessao[];
+  
   locais: Local[];
   filtros: Filtros;
   estatisticas: Estatisticas;
@@ -38,6 +52,7 @@ interface SessoesState {
 }
 
 export const useSessoesStore = create<SessoesState>((set, get) => ({
+  registros: [],
   sessoes: [],
   locais: [],
   filtros: {
@@ -59,34 +74,42 @@ export const useSessoesStore = create<SessoesState>((set, get) => ({
     
     const { filtros } = get();
     
+    // Buscar da tabela 'registros'
     let query = supabase
-      .from('sessoes')
+      .from('registros')
       .select('*')
       .eq('user_id', userId)
-      .order('inicio', { ascending: false });
+      .order('entrada', { ascending: false });
     
     if (filtros.dataInicio) {
-      query = query.gte('inicio', filtros.dataInicio.toISOString());
+      query = query.gte('entrada', filtros.dataInicio.toISOString());
     }
     if (filtros.dataFim) {
-      query = query.lte('inicio', filtros.dataFim.toISOString());
+      query = query.lte('entrada', filtros.dataFim.toISOString());
     }
     if (filtros.localId) {
       query = query.eq('local_id', filtros.localId);
-    }
-    if (filtros.status !== 'all') {
-      query = query.eq('status', filtros.status);
     }
     
     const { data, error } = await query;
     
     if (error) {
-      console.error('Erro ao buscar sessões:', error);
+      console.error('Erro ao buscar registros:', error);
       set({ isLoading: false });
       return;
     }
     
-    set({ sessoes: data || [], isLoading: false });
+    const registros = data || [];
+    
+    // Converter para Sessao (compatibilidade)
+    let sessoes = registros.map(registroToSessao);
+    
+    // Filtrar por status se necessário
+    if (filtros.status !== 'all') {
+      sessoes = sessoes.filter(s => s.status === filtros.status);
+    }
+    
+    set({ registros, sessoes, isLoading: false });
     get().calcularEstatisticas();
   },
   

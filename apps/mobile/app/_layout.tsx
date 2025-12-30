@@ -5,14 +5,16 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuthStore } from '../src/stores/authStore';
 import { useRegistroStore } from '../src/stores/registroStore';
 import { useWorkSessionStore } from '../src/stores/workSessionStore';
+import { useSyncStore } from '../src/stores/syncStore';
 import { DevMonitor } from '../src/components/DevMonitor';
 import { logger } from '../src/lib/logger';
 import { colors } from '../src/constants/colors';
 
 export default function RootLayout() {
-  const { initialize: initAuth, isLoading } = useAuthStore();
+  const { initialize: initAuth, isLoading, user } = useAuthStore();
   const { initialize: initRegistros } = useRegistroStore();
   const { initialize: initWorkSession } = useWorkSessionStore();
+  const { initialize: initSync } = useSyncStore();
   
   useEffect(() => {
     logger.info('auth', 'App starting...');
@@ -20,6 +22,14 @@ export default function RootLayout() {
     initRegistros();
     initWorkSession();
   }, []);
+  
+  // Inicializar sync quando usuário logar
+  useEffect(() => {
+    if (user) {
+      logger.info('sync', 'User logged in, initializing sync...');
+      initSync();
+    }
+  }, [user]);
   
   if (isLoading) {
     return (
