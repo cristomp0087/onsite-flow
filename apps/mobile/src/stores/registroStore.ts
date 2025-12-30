@@ -1,10 +1,12 @@
 import { create } from 'zustand';
+import { Share } from 'react-native';
 import { logger } from '../lib/logger';
 import {
   initDatabase,
   saveRegistro,
   iniciarSessao,
   finalizarSessao,
+  finalizarSessaoComAjuste,
   pausarSessao,
   retomarSessao,
   getSessaoAberta,
@@ -15,6 +17,7 @@ import {
   type SessaoDB,
   type EstatisticasDia,
 } from '../lib/database';
+import { generateSingleSessionReport } from '../lib/reports';
 
 let dbInitialized = false;
 let dbInitializing = false;
@@ -50,14 +53,18 @@ interface RegistroState {
   sessaoAtual: SessaoDB | null;
   sessoesHoje: SessaoDB[];
   estatisticasHoje: EstatisticasDia | null;
+  lastFinalizedSession: SessaoDB | null; // Última sessão finalizada (para mostrar relatório)
   
   initialize: () => Promise<void>;
   registrarEntrada: (local_id: string, coords?: { latitude: number; longitude: number; accuracy?: number }) => Promise<void>;
-  registrarSaida: (local_id: string, coords?: { latitude: number; longitude: number; accuracy?: number }) => Promise<void>;
+  registrarSaida: (local_id: string, coords?: { latitude: number; longitude: number; accuracy?: number }) => Promise<SessaoDB | null>;
+  registrarSaidaComAjuste: (local_id: string, coords?: { latitude: number; longitude: number; accuracy?: number }, adjustMinutes?: number) => Promise<SessaoDB | null>;
   pausar: () => Promise<void>;
   retomar: () => Promise<void>;
   refreshData: () => Promise<void>;
   getSessaoAtiva: (local_id: string) => Promise<SessaoDB | null>;
+  shareLastSession: (userEmail?: string) => Promise<void>;
+  clearLastSession: () => void;
 }
 
 export const useRegistroStore = create<RegistroState>((set, get) => ({
@@ -65,6 +72,7 @@ export const useRegistroStore = create<RegistroState>((set, get) => ({
   sessaoAtual: null,
   sessoesHoje: [],
   estatisticasHoje: null,
+  lastFinalizedSession: null,
   
   initialize: async () => {
     try {
@@ -130,8 +138,11 @@ export const useRegistroStore = create<RegistroState>((set, get) => ({
       const dbReady = await ensureDbInitialized();
       if (!dbReady) {
         logger.error('database', 'Cannot register saida - DB not ready');
-        return;
+        return null;
       }
+      
+      // Guardar sessão atual antes de finalizar
+      const sessaoAntes = get().sessaoAtual;
       
       logger.info('database', '📤 Registrando SAÍDA', { local_id });
       
@@ -147,9 +158,82 @@ export const useRegistroStore = create<RegistroState>((set, get) => ({
       await finalizarSessao(local_id, registro_id);
       await get().refreshData();
       
+      // Buscar a sessão que acabou de ser finalizada
+      const sessoesHoje = get().sessoesHoje;
+      const sessaoFinalizada = sessoesHoje.find(s => 
+        s.local_id === local_id && 
+        s.status === 'finalizada' &&
+        s.saida_id === registro_id
+      ) || sessoesHoje.find(s => 
+        s.local_id === local_id && 
+        s.status === 'finalizada'
+      );
+      
+      if (sessaoFinalizada) {
+        set({ lastFinalizedSession: sessaoFinalizada });
+        logger.info('database', '✅ Saída registrada com sucesso', {
+          duracao: sessaoFinalizada.duracao_minutos,
+        });
+        return sessaoFinalizada;
+      }
+      
       logger.info('database', '✅ Saída registrada com sucesso');
+      return null;
     } catch (error) {
       logger.error('database', 'Erro ao registrar saída', { error: String(error) });
+      return null;
+    }
+  },
+  
+  registrarSaidaComAjuste: async (local_id, coords, adjustMinutes = 0) => {
+    try {
+      const dbReady = await ensureDbInitialized();
+      if (!dbReady) {
+        logger.error('database', 'Cannot register saida - DB not ready');
+        return null;
+      }
+      
+      logger.info('database', '📤 Registrando SAÍDA com ajuste', { local_id, adjustMinutes });
+      
+      // Calcular o horário ajustado
+      // Se adjustMinutes = -10, significa "parei há 10 minutos"
+      const agora = new Date();
+      const horaAjustada = new Date(agora.getTime() + (adjustMinutes * 60 * 1000));
+      
+      const registro_id = await saveRegistro({
+        local_id,
+        tipo: 'saida',
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
+        accuracy: coords?.accuracy,
+        automatico: false, // Manual porque usuário escolheu ajuste
+        // Nota: Se o banco suportar, podemos passar horaAjustada
+      });
+      
+      // Finalizar sessão com ajuste de tempo
+      await finalizarSessaoComAjuste(local_id, registro_id, adjustMinutes);
+      await get().refreshData();
+      
+      // Buscar a sessão finalizada
+      const sessoesHoje = get().sessoesHoje;
+      const sessaoFinalizada = sessoesHoje.find(s => 
+        s.local_id === local_id && 
+        s.status === 'finalizada'
+      );
+      
+      if (sessaoFinalizada) {
+        set({ lastFinalizedSession: sessaoFinalizada });
+        logger.info('database', '✅ Saída registrada com ajuste', {
+          duracao: sessaoFinalizada.duracao_minutos,
+          ajuste: adjustMinutes,
+        });
+        return sessaoFinalizada;
+      }
+      
+      return null;
+    } catch (error) {
+      logger.error('database', 'Erro ao registrar saída com ajuste', { error: String(error) });
+      return null;
     }
   },
   
@@ -228,6 +312,28 @@ export const useRegistroStore = create<RegistroState>((set, get) => ({
     const dbReady = await ensureDbInitialized();
     if (!dbReady) return null;
     return await getSessaoAberta(local_id);
+  },
+  
+  shareLastSession: async (userEmail?: string) => {
+    const { lastFinalizedSession } = get();
+    if (!lastFinalizedSession) {
+      logger.warn('database', 'No last session to share');
+      return;
+    }
+    
+    try {
+      const report = generateSingleSessionReport(lastFinalizedSession, userEmail);
+      await Share.share({
+        message: report,
+        title: 'Registro de Trabalho',
+      });
+    } catch (error) {
+      logger.error('database', 'Error sharing last session', { error });
+    }
+  },
+  
+  clearLastSession: () => {
+    set({ lastFinalizedSession: null });
   },
 }));
 

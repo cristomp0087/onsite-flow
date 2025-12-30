@@ -14,10 +14,17 @@ Notifications.setNotificationHandler({
 // ============================================
 // Tipos
 // ============================================
-export type NotificationAction = 'start' | 'skip_today' | 'delay_10min' | 'stop' | 'timeout';
+export type NotificationAction = 
+  | 'start' 
+  | 'skip_today' 
+  | 'delay_10min' 
+  | 'stop' 
+  | 'pause' 
+  | 'continue' 
+  | 'timeout';
 
 export interface GeofenceNotificationData {
-  type: 'geofence_enter' | 'geofence_exit' | 'auto_start' | 'reminder';
+  type: 'geofence_enter' | 'geofence_exit' | 'auto_start' | 'auto_pause' | 'auto_resume' | 'reminder';
   localId: string;
   localNome: string;
   action?: NotificationAction;
@@ -73,7 +80,7 @@ export async function setupNotificationCategories(): Promise<void> {
       },
       {
         identifier: 'skip_today',
-        buttonTitle: '😴 Desligar por hoje',
+        buttonTitle: '😴 Ignorar hoje',
         options: { opensAppToForeground: false },
       },
       {
@@ -83,11 +90,21 @@ export async function setupNotificationCategories(): Promise<void> {
       },
     ]);
     
-    // Categoria para saída do geofence
+    // Categoria para saída do geofence - ATUALIZADA
     await Notifications.setNotificationCategoryAsync('geofence_exit', [
       {
+        identifier: 'pause',
+        buttonTitle: '⏸️ Pausar',
+        options: { opensAppToForeground: false },
+      },
+      {
+        identifier: 'continue',
+        buttonTitle: '▶️ Continuar contando',
+        options: { opensAppToForeground: false },
+      },
+      {
         identifier: 'stop',
-        buttonTitle: '⏹️ Parar cronômetro',
+        buttonTitle: '⏹️ Encerrar',
         options: { opensAppToForeground: false },
       },
     ]);
@@ -130,7 +147,7 @@ export async function showGeofenceEnterNotification(
 }
 
 // ============================================
-// Mostrar Notificação de Saída
+// Mostrar Notificação de Saída - ATUALIZADA
 // ============================================
 export async function showGeofenceExitNotification(
   localId: string,
@@ -140,7 +157,7 @@ export async function showGeofenceExitNotification(
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
         title: `🚪 Você saiu de ${localNome}`,
-        body: 'O cronômetro foi pausado automaticamente.',
+        body: 'O que deseja fazer? (Pausa automaticamente em 30s)',
         data: {
           type: 'geofence_exit',
           localId,
@@ -169,7 +186,7 @@ export async function showAutoStartNotification(localNome: string): Promise<void
       content: {
         title: `⏱️ Cronômetro iniciado`,
         body: `Você está trabalhando em ${localNome}`,
-        data: { type: 'auto_start' } as GeofenceNotificationData,
+        data: { type: 'auto_start', localId: '', localNome } as GeofenceNotificationData,
         sound: 'default',
       },
       trigger: null,
@@ -178,6 +195,48 @@ export async function showAutoStartNotification(localNome: string): Promise<void
     logger.info('notifications', 'Auto-start notification shown');
   } catch (error) {
     logger.error('notifications', 'Error showing auto-start notification', { error });
+  }
+}
+
+// ============================================
+// Mostrar Notificação de Auto-Pausa - NOVA
+// ============================================
+export async function showAutoPauseNotification(localNome: string): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `⏸️ Cronômetro pausado`,
+        body: `Você saiu de ${localNome}. Voltará a contar quando você retornar.`,
+        data: { type: 'auto_pause', localId: '', localNome } as GeofenceNotificationData,
+        sound: 'default',
+      },
+      trigger: null,
+    });
+    
+    logger.info('notifications', 'Auto-pause notification shown');
+  } catch (error) {
+    logger.error('notifications', 'Error showing auto-pause notification', { error });
+  }
+}
+
+// ============================================
+// Mostrar Notificação de Auto-Retomada - NOVA
+// ============================================
+export async function showAutoResumeNotification(localNome: string): Promise<void> {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: `▶️ Cronômetro retomado`,
+        body: `Você voltou para ${localNome}. Continuando a contar suas horas.`,
+        data: { type: 'auto_resume', localId: '', localNome } as GeofenceNotificationData,
+        sound: 'default',
+      },
+      trigger: null,
+    });
+    
+    logger.info('notifications', 'Auto-resume notification shown');
+  } catch (error) {
+    logger.error('notifications', 'Error showing auto-resume notification', { error });
   }
 }
 
@@ -219,6 +278,8 @@ export async function scheduleDelayedStart(
 // Cancelar Notificação
 // ============================================
 export async function cancelNotification(notificationId: string): Promise<void> {
+  if (!notificationId) return;
+  
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
     logger.debug('notifications', 'Notification cancelled', { notificationId });

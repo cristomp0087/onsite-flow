@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../lib/logger';
 import {
   getCurrentLocation,
@@ -15,8 +16,10 @@ import {
   type LocationResult,
   type GeofenceRegion,
 } from '../lib/location';
+import { saveLocal, getLocais, deleteLocal as deleteLocalDB } from '../lib/database';
 import { setGeofenceCallback, type GeofenceEvent } from '../lib/backgroundTasks';
 import { useWorkSessionStore } from './workSessionStore';
+import { useRegistroStore } from './registroStore';
 
 export interface LocalDeTrabalho {
   id: string;
@@ -29,6 +32,8 @@ export interface LocalDeTrabalho {
 }
 
 const POLLING_INTERVAL = 30000;
+const STORAGE_KEY_MONITORING = '@onsite_monitoring_active';
+
 let pollingTimer: NodeJS.Timeout | null = null;
 
 interface LocationState {
@@ -44,19 +49,25 @@ interface LocationState {
   isBackgroundActive: boolean;
   isPollingActive: boolean;
   lastGeofenceEvent: GeofenceEvent | null;
+  isInitialized: boolean;
+  
+  // Flag para evitar processamento duplicado
+  isProcessingGeofenceEvent: boolean;
   
   initialize: () => Promise<void>;
   refreshLocation: () => Promise<void>;
   startTracking: () => Promise<void>;
   stopTracking: () => Promise<void>;
-  addLocal: (local: Omit<LocalDeTrabalho, 'id'>) => void;
-  removeLocal: (id: string) => void;
+  addLocal: (local: Omit<LocalDeTrabalho, 'id'>) => Promise<void>;
+  removeLocal: (id: string) => Promise<void>;
   updateLocal: (id: string, updates: Partial<LocalDeTrabalho>) => void;
+  loadLocaisFromDB: () => Promise<void>;
   startGeofenceMonitoring: () => Promise<void>;
   stopGeofenceMonitoring: () => Promise<void>;
   checkCurrentGeofence: () => void;
   startPolling: () => void;
   stopPolling: () => void;
+  autoStartMonitoringIfNeeded: () => Promise<void>;
 }
 
 export const useLocationStore = create<LocationState>((set, get) => ({
@@ -72,26 +83,78 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   isBackgroundActive: false,
   isPollingActive: false,
   lastGeofenceEvent: null,
+  isInitialized: false,
+  isProcessingGeofenceEvent: false,
   
   initialize: async () => {
+    if (get().isInitialized) return;
+    
     logger.info('gps', 'Initializing location store');
     
+    // Importar background tasks
     await import('../lib/backgroundTasks');
     
+    // Verificar permissões
     const permissions = await checkPermissions();
     set({
       hasPermission: permissions.foreground,
       hasBackgroundPermission: permissions.background,
     });
     
+    // Configurar callback de geofence nativo
     setGeofenceCallback((event) => {
+      const { isProcessingGeofenceEvent } = get();
+      
+      // Evitar processamento duplicado
+      if (isProcessingGeofenceEvent) {
+        logger.warn('geofence', 'Already processing event, skipping', { event: event.type });
+        return;
+      }
+      
       logger.info('geofence', `System event: ${event.type} - ${event.regionIdentifier}`);
       set({ 
         lastGeofenceEvent: event,
         activeGeofence: event.type === 'enter' ? event.regionIdentifier : null,
       });
+      
+      // Processar evento via workSessionStore
+      const workSession = useWorkSessionStore.getState();
+      const registroStore = useRegistroStore.getState();
+      const { locais, currentLocation, accuracy } = get();
+      const local = locais.find(l => l.id === event.regionIdentifier);
+      
+      if (local) {
+        const coords = currentLocation ? {
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          accuracy: accuracy || undefined,
+        } : undefined;
+        
+        // REGRA: Só processar entrada se não há sessão ATIVA
+        if (event.type === 'enter') {
+          const sessaoAtual = registroStore.sessaoAtual;
+          
+          // Se já tem sessão ATIVA em OUTRO local, ignorar
+          // Sessões pausadas/finalizadas NÃO bloqueiam
+          if (sessaoAtual && sessaoAtual.status === 'ativa' && sessaoAtual.local_id !== local.id) {
+            logger.warn('geofence', 'Ignoring enter - already has ACTIVE session in another location', {
+              activeLocalId: sessaoAtual.local_id,
+              newLocalId: local.id,
+            });
+            return;
+          }
+          
+          workSession.handleGeofenceEnter(local.id, local.nome, coords);
+        } else {
+          workSession.handleGeofenceExit(local.id, local.nome, coords);
+        }
+      }
     });
     
+    // Carregar locais do banco de dados
+    await get().loadLocaisFromDB();
+    
+    // Obter localização atual
     const location = await getCurrentLocation();
     if (location) {
       set({
@@ -100,7 +163,62 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         lastUpdate: location.timestamp,
         hasPermission: true,
       });
-      get().checkCurrentGeofence();
+    }
+    
+    set({ isInitialized: true });
+    
+    // Auto-start do monitoramento se necessário
+    await get().autoStartMonitoringIfNeeded();
+    
+    // Verificar geofence atual
+    get().checkCurrentGeofence();
+  },
+  
+  loadLocaisFromDB: async () => {
+    try {
+      const locaisDB = await getLocais();
+      const locais: LocalDeTrabalho[] = locaisDB.map(l => ({
+        id: l.id,
+        nome: l.nome,
+        latitude: l.latitude,
+        longitude: l.longitude,
+        raio: l.raio,
+        cor: l.cor,
+        ativo: l.ativo === 1,
+      }));
+      
+      set({ locais });
+      logger.info('gps', `Loaded ${locais.length} locations from database`);
+    } catch (error) {
+      logger.error('gps', 'Error loading locations from DB', { error });
+    }
+  },
+  
+  autoStartMonitoringIfNeeded: async () => {
+    const { locais, isGeofencingActive } = get();
+    
+    // Se já está ativo, não fazer nada
+    if (isGeofencingActive) return;
+    
+    // Se não há locais, não iniciar
+    if (locais.length === 0) {
+      logger.info('gps', 'No locations to monitor, skipping auto-start');
+      return;
+    }
+    
+    // Verificar se o usuário tinha monitoramento ativo antes
+    try {
+      const wasActive = await AsyncStorage.getItem(STORAGE_KEY_MONITORING);
+      
+      // Auto-iniciar se tinha locais E (era ativo antes OU é primeira vez)
+      if (wasActive === 'true' || wasActive === null) {
+        logger.info('gps', 'Auto-starting geofence monitoring...');
+        await get().startGeofenceMonitoring();
+      }
+    } catch (error) {
+      logger.error('gps', 'Error checking monitoring state', { error });
+      // Em caso de erro, iniciar mesmo assim se há locais
+      await get().startGeofenceMonitoring();
     }
   },
   
@@ -139,23 +257,103 @@ export const useLocationStore = create<LocationState>((set, get) => ({
     logger.info('gps', 'Real-time tracking stopped');
   },
   
-  addLocal: (local) => {
+  addLocal: async (local) => {
+    const registroStore = useRegistroStore.getState();
+    const sessaoAtual = registroStore.sessaoAtual;
+    
+    // REGRA: Se há sessão ativa, não reiniciar monitoramento
+    // Apenas adicionar o local sem perturbar a sessão em andamento
+    const hasActiveSession = sessaoAtual && sessaoAtual.status !== 'finalizada';
+    
     const newLocal: LocalDeTrabalho = {
       ...local,
       id: `local_${Date.now()}`,
     };
     
-    logger.info('geofence', 'Adding new local', { nome: local.nome });
-    set((state) => ({ locais: [...state.locais, newLocal] }));
-    setTimeout(() => get().checkCurrentGeofence(), 100);
+    logger.info('geofence', 'Adding new local', { 
+      nome: local.nome,
+      hasActiveSession,
+    });
+    
+    // Salvar no banco de dados
+    try {
+      await saveLocal({
+        id: newLocal.id,
+        nome: newLocal.nome,
+        latitude: newLocal.latitude,
+        longitude: newLocal.longitude,
+        raio: newLocal.raio,
+        cor: newLocal.cor,
+        ativo: newLocal.ativo,
+      });
+      
+      set((state) => ({ locais: [...state.locais, newLocal] }));
+      
+      // Se NÃO há sessão ativa, reiniciar monitoramento normalmente
+      if (!hasActiveSession) {
+        if (get().isGeofencingActive) {
+          await get().stopGeofenceMonitoring();
+          await get().startGeofenceMonitoring();
+        } else {
+          // Auto-iniciar monitoramento quando primeiro local é adicionado
+          await get().startGeofenceMonitoring();
+        }
+      } else {
+        // Se HÁ sessão ativa, apenas adicionar às fences sem reiniciar
+        // O novo local será monitorado, mas não vai interromper a sessão atual
+        logger.info('geofence', 'Session active - adding local without restarting monitoring');
+        
+        // Atualizar geofencing para incluir novo local (sem parar o atual)
+        const { locais: allLocais } = get();
+        const activeLocais = allLocais.filter(l => l.ativo);
+        const regions: GeofenceRegion[] = activeLocais.map(l => ({
+          identifier: l.id,
+          latitude: l.latitude,
+          longitude: l.longitude,
+          radius: l.raio,
+          notifyOnEnter: true,
+          notifyOnExit: true,
+        }));
+        
+        // Reiniciar geofencing silenciosamente (sem afetar sessão)
+        await stopGeofencing();
+        await startGeofencing(regions);
+      }
+      
+      // NÃO verificar geofence atual se há sessão ativa
+      // Isso evita que o sistema "redescubra" que estamos numa fence e abra nova sessão
+      if (!hasActiveSession) {
+        setTimeout(() => get().checkCurrentGeofence(), 100);
+      }
+    } catch (error) {
+      logger.error('geofence', 'Error saving local to DB', { error });
+    }
   },
   
-  removeLocal: (id) => {
+  removeLocal: async (id) => {
     logger.info('geofence', 'Removing local', { id });
-    set((state) => ({ 
-      locais: state.locais.filter(l => l.id !== id),
-      activeGeofence: state.activeGeofence === id ? null : state.activeGeofence,
-    }));
+    
+    try {
+      await deleteLocalDB(id);
+      
+      set((state) => ({ 
+        locais: state.locais.filter(l => l.id !== id),
+        activeGeofence: state.activeGeofence === id ? null : state.activeGeofence,
+      }));
+      
+      // Se monitoramento está ativo, reiniciar para remover local
+      const { locais, isGeofencingActive } = get();
+      if (isGeofencingActive) {
+        if (locais.length === 0) {
+          await get().stopGeofenceMonitoring();
+        } else {
+          await get().stopGeofenceMonitoring();
+          await get().startGeofenceMonitoring();
+        }
+      }
+    } catch (error) {
+      logger.error('geofence', 'Error removing local from DB', { error });
+    }
   },
   
   updateLocal: (id, updates) => {
@@ -210,7 +408,24 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       await startBackgroundLocation();
       set({ isBackgroundActive: true });
       get().startPolling();
+      
+      // Persistir estado
+      try {
+        await AsyncStorage.setItem(STORAGE_KEY_MONITORING, 'true');
+      } catch (error) {
+        logger.error('gps', 'Error saving monitoring state', { error });
+      }
+      
       logger.info('geofence', 'Full monitoring started (geofence + polling)');
+      
+      // NÃO verificar geofence atual ao iniciar monitoramento
+      // Se já há sessão ativa, não queremos interferir
+      const registroStore = useRegistroStore.getState();
+      const sessaoAtual = registroStore.sessaoAtual;
+      
+      if (!sessaoAtual || sessaoAtual.status === 'finalizada') {
+        get().checkCurrentGeofence();
+      }
     }
   },
   
@@ -223,67 +438,108 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       isBackgroundActive: false,
       isPollingActive: false,
     });
+    
+    // Persistir estado
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_MONITORING, 'false');
+    } catch (error) {
+      logger.error('gps', 'Error saving monitoring state', { error });
+    }
+    
     logger.info('geofence', 'All monitoring stopped');
   },
   
-  // ATUALIZADO: Usa workSessionStore para notificações
   checkCurrentGeofence: () => {
-    const { currentLocation, locais, activeGeofence, accuracy } = get();
+    const { currentLocation, locais, activeGeofence, accuracy, isProcessingGeofenceEvent } = get();
     if (!currentLocation) return;
+    
+    // Evitar processamento se já está processando
+    if (isProcessingGeofenceEvent) {
+      logger.debug('geofence', 'Skipping check - already processing');
+      return;
+    }
+    
+    // Verificar se há sessão ATIVA - se sim, não processar novas entradas
+    // Sessões pausadas/finalizadas NÃO bloqueiam
+    const registroStore = useRegistroStore.getState();
+    const sessaoAtual = registroStore.sessaoAtual;
+    const hasActiveSession = sessaoAtual && sessaoAtual.status === 'ativa';
     
     const activeLocais = locais.filter(l => l.ativo);
     const workSession = useWorkSessionStore.getState();
     
-    for (const local of activeLocais) {
-      const inside = isInsideGeofence(currentLocation, {
-        identifier: local.id,
-        latitude: local.latitude,
-        longitude: local.longitude,
-        radius: local.raio,
-      });
+    // Marcar como processando
+    set({ isProcessingGeofenceEvent: true });
+    
+    try {
+      for (const local of activeLocais) {
+        const inside = isInsideGeofence(currentLocation, {
+          identifier: local.id,
+          latitude: local.latitude,
+          longitude: local.longitude,
+          radius: local.raio,
+        });
+        
+        if (inside) {
+          if (activeGeofence !== local.id) {
+            // ENTROU no geofence
+            logger.info('geofence', `✅ ENTERED: ${local.nome}`, {
+              localId: local.id,
+              hasActiveSession,
+              distance: calculateDistance(currentLocation, {
+                latitude: local.latitude,
+                longitude: local.longitude,
+              }).toFixed(1) + 'm',
+            });
+            
+            set({ activeGeofence: local.id });
+            
+            // REGRA: Só notificar entrada se não há sessão ativa OU é o mesmo local
+            if (!hasActiveSession) {
+              workSession.handleGeofenceEnter(local.id, local.nome, {
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+                accuracy: accuracy || undefined,
+              });
+            } else if (sessaoAtual?.local_id === local.id) {
+              // Mesmo local - pode ser retomada
+              workSession.handleGeofenceEnter(local.id, local.nome, {
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+                accuracy: accuracy || undefined,
+              });
+            } else {
+              logger.info('geofence', 'Entered fence but session active in another location - ignoring');
+            }
+          }
+          return;
+        }
+      }
       
-      if (inside) {
-        if (activeGeofence !== local.id) {
-          // ENTROU no geofence
-          logger.info('geofence', `✅ ENTERED: ${local.nome}`, {
-            localId: local.id,
-            distance: calculateDistance(currentLocation, {
-              latitude: local.latitude,
-              longitude: local.longitude,
-            }).toFixed(1) + 'm',
-          });
-          
-          set({ activeGeofence: local.id });
-          
-          // NOTIFICAÇÃO em vez de registro direto
-          workSession.handleGeofenceEnter(local.id, local.nome, {
+      // Não está em nenhum geofence
+      if (activeGeofence !== null) {
+        const previousLocal = locais.find(l => l.id === activeGeofence);
+        
+        logger.info('geofence', `🚪 EXITED: ${previousLocal?.nome || 'unknown'}`, {
+          localId: activeGeofence,
+        });
+        
+        // Notificar saída
+        if (previousLocal) {
+          workSession.handleGeofenceExit(activeGeofence, previousLocal.nome, {
             latitude: currentLocation.latitude,
             longitude: currentLocation.longitude,
             accuracy: accuracy || undefined,
           });
         }
-        return;
+        
+        set({ activeGeofence: null });
       }
-    }
-    
-    // Não está em nenhum geofence
-    if (activeGeofence !== null) {
-      const previousLocal = locais.find(l => l.id === activeGeofence);
-      
-      logger.info('geofence', `🚪 EXITED: ${previousLocal?.nome || 'unknown'}`, {
-        localId: activeGeofence,
-      });
-      
-      // NOTIFICAÇÃO de saída
-      if (previousLocal) {
-        workSession.handleGeofenceExit(activeGeofence, previousLocal.nome, {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          accuracy: accuracy || undefined,
-        });
-      }
-      
-      set({ activeGeofence: null });
+    } finally {
+      // Desmarcar processamento após um pequeno delay
+      setTimeout(() => {
+        set({ isProcessingGeofenceEvent: false });
+      }, 1000);
     }
   },
 }));

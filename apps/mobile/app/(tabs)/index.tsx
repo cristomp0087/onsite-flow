@@ -1,14 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, AppState, Alert, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useLocationStore } from '../../src/stores/locationStore';
 import { useRegistroStore } from '../../src/stores/registroStore';
 import { useWorkSessionStore } from '../../src/stores/workSessionStore';
+import { useSettingsStore } from '../../src/stores/settingsStore';
 import { logger } from '../../src/lib/logger';
 import { colors } from '../../src/constants/colors';
 import { Button } from '../../src/components/ui/Button';
-import { formatDuration } from '../../src/lib/database';
+import { GeofenceAlert, type GeofenceAlertData } from '../../src/components/GeofenceAlert';
 
 export default function HomeScreen() {
   const { user } = useAuthStore();
@@ -19,7 +20,16 @@ export default function HomeScreen() {
     accuracy,
     locais,
     activeGeofence,
+    isInitialized: locationInitialized,
   } = useLocationStore();
+  
+  // Configurações personalizáveis
+  const {
+    exitTimeOption1,
+    exitTimeOption2,
+    entryDelayOption,
+    autoActionTimeout,
+  } = useSettingsStore();
   
   const {
     initialize: initRegistros,
@@ -30,63 +40,198 @@ export default function HomeScreen() {
     pausar,
     retomar,
     registrarSaida,
+    isInitialized: registroInitialized,
   } = useRegistroStore();
   
-  const { startTimer } = useWorkSessionStore();
+  const { 
+    initialize: initWorkSession,
+    startTimer,
+    pauseTimer,
+    stopTimer,
+    stopTimerWithAdjustment,
+    pendingEntry,
+    pendingExit,
+    clearPending,
+    addToSkippedToday,
+    scheduleDelayedStart,
+    scheduleDelayedStop,
+    isInitialized: workSessionInitialized,
+  } = useWorkSessionStore();
   
-  const [elapsedMinutes, setElapsedMinutes] = useState(0);
+  // Tempo em SEGUNDOS para precisão
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Estado do alert grande
+  const [alertData, setAlertData] = useState<GeofenceAlertData | null>(null);
+  const [showAlert, setShowAlert] = useState(false);
   
   const activeLocal = locais.find(l => l.id === activeGeofence);
   const isInsideGeofence = !!activeGeofence;
   const isWorking = sessaoAtual && sessaoAtual.status !== 'finalizada';
   const isPaused = sessaoAtual?.status === 'pausada';
   
+  // Inicialização completa
   useEffect(() => {
-    initLocation();
-    initRegistros();
+    const initializeAll = async () => {
+      try {
+        logger.info('home', 'Starting full initialization...');
+        setIsInitializing(true);
+        
+        // 1. Inicializar banco de dados e registros
+        await initRegistros();
+        
+        // 2. Inicializar workSessionStore (notificações)
+        await initWorkSession();
+        
+        // 3. Inicializar localização (vai auto-iniciar monitoramento se necessário)
+        await initLocation();
+        
+        logger.info('home', 'Full initialization complete');
+      } catch (error) {
+        logger.error('home', 'Initialization error', { error });
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+    
+    initializeAll();
   }, []);
   
-  // Cronômetro em tempo real
+  // Mostrar alert quando há pending entry ou exit
+  useEffect(() => {
+    if (pendingEntry) {
+      setAlertData({
+        type: 'enter',
+        localId: pendingEntry.localId,
+        localNome: pendingEntry.localNome,
+        onStart: handleAlertStart,
+        onDelayEntry: handleAlertDelayEntry,
+        onSkipToday: handleAlertSkipToday,
+        onStop: () => {},
+        onStopAgo1: () => {},
+        onStopAgo2: () => {},
+        onDismiss: handleAlertDismiss,
+      });
+      setShowAlert(true);
+    } else if (pendingExit) {
+      setAlertData({
+        type: 'exit',
+        localId: pendingExit.localId,
+        localNome: pendingExit.localNome,
+        onStart: () => {},
+        onDelayEntry: () => {},
+        onSkipToday: () => {},
+        onStop: handleAlertStop,
+        onStopAgo1: handleAlertStopAgo1,
+        onStopAgo2: handleAlertStopAgo2,
+        onDismiss: handleAlertDismiss,
+      });
+      setShowAlert(true);
+    } else {
+      setShowAlert(false);
+      setAlertData(null);
+    }
+  }, [pendingEntry, pendingExit]);
+  
+  // Handlers do Alert - ENTRADA
+  const handleAlertStart = useCallback(async () => {
+    if (!pendingEntry) return;
+    setShowAlert(false);
+    await startTimer(pendingEntry.localId, pendingEntry.coords);
+    clearPending();
+    refreshData();
+  }, [pendingEntry, startTimer, clearPending, refreshData]);
+  
+  const handleAlertDelayEntry = useCallback(async () => {
+    if (!pendingEntry) return;
+    setShowAlert(false);
+    await scheduleDelayedStart(pendingEntry.localId, pendingEntry.localNome, entryDelayOption);
+    clearPending();
+  }, [pendingEntry, scheduleDelayedStart, clearPending, entryDelayOption]);
+  
+  const handleAlertSkipToday = useCallback(() => {
+    if (!pendingEntry) return;
+    setShowAlert(false);
+    addToSkippedToday(pendingEntry.localId);
+    clearPending();
+  }, [pendingEntry, addToSkippedToday, clearPending]);
+  
+  // Handlers do Alert - SAÍDA
+  const handleAlertStop = useCallback(async () => {
+    if (!pendingExit) return;
+    setShowAlert(false);
+    await stopTimer(pendingExit.localId, pendingExit.coords);
+    clearPending();
+    refreshData();
+  }, [pendingExit, stopTimer, clearPending, refreshData]);
+  
+  const handleAlertStopAgo1 = useCallback(async () => {
+    if (!pendingExit) return;
+    setShowAlert(false);
+    // Encerrar com desconto de X minutos (configurável)
+    scheduleDelayedStop(pendingExit.localId, pendingExit.localNome, exitTimeOption1, pendingExit.coords);
+    clearPending();
+    refreshData();
+  }, [pendingExit, clearPending, refreshData, exitTimeOption1, scheduleDelayedStop]);
+  
+  const handleAlertStopAgo2 = useCallback(async () => {
+    if (!pendingExit) return;
+    setShowAlert(false);
+    // Encerrar com desconto de X minutos (configurável)
+    scheduleDelayedStop(pendingExit.localId, pendingExit.localNome, exitTimeOption2, pendingExit.coords);
+    clearPending();
+    refreshData();
+  }, [pendingExit, clearPending, refreshData, exitTimeOption2, scheduleDelayedStop]);
+  
+  const handleAlertDismiss = useCallback(() => {
+    setShowAlert(false);
+    // Não limpa pending - vai continuar o countdown via notificação do sistema
+  }, []);
+  
+  // Cronômetro em tempo real - APENAS SESSÃO ATUAL
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
     
+    const updateTime = () => {
+      if (!sessaoAtual) {
+        // Sem sessão ativa - mostrar ZERO (não total do dia)
+        setElapsedSeconds(0);
+        return;
+      }
+      
+      const inicio = new Date(sessaoAtual.inicio);
+      const agora = new Date();
+      const diffSeconds = Math.floor((agora.getTime() - inicio.getTime()) / 1000);
+      
+      // Tempo pausado (em segundos)
+      const tempoPausado = (sessaoAtual.tempo_pausado_minutos || 0) * 60;
+      
+      if (sessaoAtual.status === 'ativa') {
+        // Mostrar APENAS tempo desta sessão
+        setElapsedSeconds(Math.max(0, diffSeconds - tempoPausado));
+      } else if (sessaoAtual.status === 'pausada') {
+        // Quando pausado, mostrar último valor
+        setElapsedSeconds(Math.max(0, diffSeconds - tempoPausado));
+      } else {
+        // Finalizada - mostrar zero para próxima sessão
+        setElapsedSeconds(0);
+      }
+    };
+    
     if (sessaoAtual && sessaoAtual.status === 'ativa') {
-      updateElapsedTime();
-      timer = setInterval(updateElapsedTime, 1000);
-    } else if (sessaoAtual && sessaoAtual.status === 'pausada') {
-      // Quando pausado, mostrar tempo até a pausa
-      updateElapsedTime();
+      updateTime();
+      timer = setInterval(updateTime, 1000); // Atualiza a cada segundo
     } else {
-      setElapsedMinutes(estatisticasHoje?.total_minutos || 0);
+      updateTime();
     }
     
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [sessaoAtual, estatisticasHoje]);
+  }, [sessaoAtual]);
   
-  const updateElapsedTime = () => {
-    if (!sessaoAtual) return;
-    
-    const inicio = new Date(sessaoAtual.inicio);
-    const agora = new Date();
-    const diffMinutes = Math.floor((agora.getTime() - inicio.getTime()) / 60000);
-    
-    const sessoesFinalizadas = sessoesHoje
-      .filter(s => s.status === 'finalizada')
-      .reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
-    
-    // Descontar tempo pausado
-    const tempoPausado = sessaoAtual.tempo_pausado_minutos || 0;
-    
-    if (sessaoAtual.status === 'ativa') {
-      setElapsedMinutes(sessoesFinalizadas + diffMinutes - tempoPausado);
-    } else {
-      // Se pausado, não incrementar
-      setElapsedMinutes(sessoesFinalizadas + diffMinutes - tempoPausado);
-    }
-  };
-  
+  // Refresh quando app volta pro foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
@@ -95,6 +240,22 @@ export default function HomeScreen() {
     });
     return () => subscription.remove();
   }, []);
+  
+  // Formatar tempo com horas, minutos E segundos
+  const formatTimeWithSeconds = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
+  };
+  
+  // Formatar só horas e minutos (para exibição compacta)
+  const formatTimeCompact = (totalSeconds: number): string => {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${hours}h ${minutes.toString().padStart(2, '0')}min`;
+  };
   
   // Iniciar manualmente
   const handleStart = async () => {
@@ -114,14 +275,7 @@ export default function HomeScreen() {
   
   // Pausar
   const handlePause = () => {
-    Alert.alert(
-      'Pausar Cronômetro',
-      'Deseja pausar? O tempo não será contado até você retomar.',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Pausar', onPress: pausar },
-      ]
-    );
+    pausar();
   };
   
   // Retomar
@@ -129,32 +283,66 @@ export default function HomeScreen() {
     retomar();
   };
   
-  // Encerrar
+  // Encerrar - CORRIGIDO
   const handleStop = () => {
     if (!sessaoAtual) return;
     
     Alert.alert(
       'Encerrar Cronômetro',
-      'Deseja encerrar e gerar o relatório?',
+      'Deseja encerrar e finalizar o registro?',
       [
         { text: 'Cancelar', style: 'cancel' },
         { 
           text: 'Encerrar', 
           style: 'destructive',
           onPress: async () => {
-            await registrarSaida(sessaoAtual.local_id, currentLocation ? {
-              latitude: currentLocation.latitude,
-              longitude: currentLocation.longitude,
-              accuracy: accuracy || undefined,
-            } : undefined);
+            try {
+              logger.info('home', 'Encerrar pressed - stopping session', { 
+                localId: sessaoAtual.local_id 
+              });
+              
+              await registrarSaida(sessaoAtual.local_id, currentLocation ? {
+                latitude: currentLocation.latitude,
+                longitude: currentLocation.longitude,
+                accuracy: accuracy || undefined,
+              } : undefined);
+              
+              // Forçar refresh após encerrar
+              await refreshData();
+              
+              logger.info('home', 'Session stopped successfully');
+            } catch (error) {
+              logger.error('home', 'Error stopping session', { error });
+              Alert.alert('Erro', 'Não foi possível encerrar a sessão. Tente novamente.');
+            }
           }
         },
       ]
     );
   };
   
+  if (isInitializing) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Carregando...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+  
   return (
     <SafeAreaView style={styles.container}>
+      {/* Alert grande estilo despertador */}
+      <GeofenceAlert
+        visible={showAlert}
+        data={alertData}
+        autoActionSeconds={autoActionTimeout}
+        entryDelayMinutes={entryDelayOption}
+        exitAgoMinutes1={exitTimeOption1}
+        exitAgoMinutes2={exitTimeOption2}
+      />
+      
       <ScrollView>
         <View style={styles.header}>
           <Text style={styles.greeting}>👋 Olá!</Text>
@@ -221,11 +409,11 @@ export default function HomeScreen() {
           )}
         </View>
         
-        {/* Horas Card */}
+        {/* Horas Card - COM SEGUNDOS */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>⏱️ Hoje</Text>
           <Text style={[styles.bigNumber, isWorking && !isPaused && styles.activeNumber]}>
-            {formatDuration(elapsedMinutes)}
+            {formatTimeWithSeconds(elapsedSeconds)}
           </Text>
           {isWorking && !isPaused && (
             <Text style={styles.runningIndicator}>● Cronômetro rodando...</Text>
@@ -259,7 +447,7 @@ export default function HomeScreen() {
                   sessao.status === 'ativa' && styles.activeDuracao,
                 ]}>
                   {sessao.status === 'finalizada' 
-                    ? formatDuration(sessao.duracao_minutos || 0)
+                    ? formatTimeCompact((sessao.duracao_minutos || 0) * 60)
                     : sessao.status === 'pausada' ? '⏸️' : '⏳'}
                 </Text>
               </View>
@@ -284,6 +472,11 @@ export default function HomeScreen() {
               {isGeofencingActive ? '🟢 Ativo' : '⚫ Inativo'}
             </Text>
           </View>
+          {locais.length > 0 && !isGeofencingActive && (
+            <Text style={styles.warningText}>
+              ⚠️ Monitoramento inativo. Vá em Mapa para ativar.
+            </Text>
+          )}
         </View>
         
         <View style={{ height: 100 }} />
@@ -296,6 +489,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.backgroundSecondary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   header: {
     padding: 16,
@@ -382,10 +584,16 @@ const styles = StyleSheet.create({
     color: colors.textTertiary,
     marginTop: 8,
   },
+  warningText: {
+    fontSize: 12,
+    color: '#F59E0B',
+    marginTop: 8,
+  },
   bigNumber: {
-    fontSize: 42,
+    fontSize: 36,
     fontWeight: 'bold',
     color: colors.primary,
+    fontVariant: ['tabular-nums'],
   },
   activeNumber: {
     color: colors.success,

@@ -6,11 +6,21 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Share,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { useRegistroStore } from '../../src/stores/registroStore';
+import { useAuthStore } from '../../src/stores/authStore';
 import { getSessoes, formatDuration, type SessaoDB } from '../../src/lib/database';
+import { 
+  generateTextReport, 
+  generateSummaryReport,
+  generateSingleSessionReport,
+  formatDateBR,
+  formatDurationText,
+} from '../../src/lib/reports';
 import { colors } from '../../src/constants/colors';
 import { logger } from '../../src/lib/logger';
 
@@ -18,11 +28,16 @@ type FilterPeriod = 'hoje' | 'semana' | 'mes';
 
 export default function HistoryScreen() {
   const { refreshData, isInitialized } = useRegistroStore();
+  const { user } = useAuthStore();
   const [filter, setFilter] = useState<FilterPeriod>('hoje');
   const [sessoes, setSessoes] = useState<SessaoDB[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [totalMinutos, setTotalMinutos] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Modo seleção
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   const loadSessoes = useCallback(async () => {
     if (!isInitialized) {
@@ -56,10 +71,12 @@ export default function HistoryScreen() {
         dataFim: hoje.toISOString().split('T')[0],
       });
       
-      setSessoes(result);
+      // Filtrar apenas sessões finalizadas para o relatório
+      const finalizadas = result.filter(s => s.status === 'finalizada');
+      setSessoes(result); // Mantém todas para exibição
       
-      // Calcular total
-      const total = result.reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
+      // Calcular total apenas das finalizadas
+      const total = finalizadas.reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
       setTotalMinutos(total);
       
       logger.debug('database', `History: loaded ${result.length} sessions for ${filter}`);
@@ -70,17 +87,18 @@ export default function HistoryScreen() {
     }
   }, [filter, isInitialized]);
   
-  // Carregar ao mudar filtro
   useEffect(() => {
     loadSessoes();
   }, [loadSessoes]);
   
-  // ATUALIZAR QUANDO A TELA RECEBE FOCO
   useFocusEffect(
     useCallback(() => {
       logger.debug('database', 'History screen focused - refreshing');
       refreshData();
       loadSessoes();
+      // Limpar seleção ao voltar
+      setSelectionMode(false);
+      setSelectedIds(new Set());
     }, [loadSessoes, refreshData])
   );
   
@@ -89,6 +107,96 @@ export default function HistoryScreen() {
     await refreshData();
     await loadSessoes();
     setRefreshing(false);
+  };
+  
+  // Toggle seleção de uma sessão
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+  
+  // Ativar modo seleção (long press)
+  const handleLongPress = (id: string) => {
+    if (!selectionMode) {
+      setSelectionMode(true);
+      setSelectedIds(new Set([id]));
+    }
+  };
+  
+  // Cancelar seleção
+  const cancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+  
+  // Selecionar todas
+  const selectAll = () => {
+    const finalizadas = sessoes.filter(s => s.status === 'finalizada');
+    setSelectedIds(new Set(finalizadas.map(s => s.id)));
+  };
+  
+  // Compartilhar selecionadas
+  const shareSelected = async () => {
+    const selectedSessoes = sessoes.filter(s => selectedIds.has(s.id) && s.status === 'finalizada');
+    
+    if (selectedSessoes.length === 0) {
+      Alert.alert('Aviso', 'Selecione pelo menos uma sessão finalizada.');
+      return;
+    }
+    
+    // Determinar período
+    const datas = selectedSessoes.map(s => s.inicio.split('T')[0]).sort();
+    const dataInicio = datas[0];
+    const dataFim = datas[datas.length - 1];
+    
+    const report = generateTextReport({
+      sessoes: selectedSessoes,
+      dataInicio,
+      dataFim,
+      userEmail: user?.email,
+    });
+    
+    try {
+      // Compartilhar usando Share nativo
+      const result = await Share.share({
+        message: report,
+        title: 'Relatório de Horas',
+      });
+      
+      if (result.action === Share.sharedAction) {
+        cancelSelection();
+      }
+    } catch (error) {
+      logger.error('reports', 'Error sharing report', { error: String(error) });
+      Alert.alert('Erro', 'Não foi possível compartilhar o relatório.');
+    }
+  };
+  
+  // Compartilhar sessão individual
+  const shareSingle = async (sessao: SessaoDB) => {
+    if (sessao.status !== 'finalizada') {
+      Alert.alert('Aviso', 'Só é possível compartilhar sessões finalizadas.');
+      return;
+    }
+    
+    const report = generateSingleSessionReport(sessao, user?.email);
+    
+    try {
+      await Share.share({
+        message: report,
+        title: 'Registro de Trabalho',
+      });
+    } catch (error) {
+      logger.error('reports', 'Error sharing single report', { error: String(error) });
+      Alert.alert('Erro', 'Não foi possível compartilhar o registro.');
+    }
   };
   
   // Agrupar sessões por dia
@@ -123,37 +231,77 @@ export default function HistoryScreen() {
     });
   };
   
+  const selectedCount = selectedIds.size;
+  const selectedMinutos = sessoes
+    .filter(s => selectedIds.has(s.id))
+    .reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
+  
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>📋 Histórico</Text>
-        <Text style={styles.subtitle}>Seus registros de trabalho</Text>
+        {selectionMode ? (
+          <View style={styles.selectionHeader}>
+            <TouchableOpacity onPress={cancelSelection}>
+              <Text style={styles.cancelButton}>✕ Cancelar</Text>
+            </TouchableOpacity>
+            <Text style={styles.selectionCount}>{selectedCount} selecionado(s)</Text>
+            <TouchableOpacity onPress={selectAll}>
+              <Text style={styles.selectAllButton}>Todos</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.title}>📋 Histórico</Text>
+            <Text style={styles.subtitle}>Toque e segure para selecionar</Text>
+          </>
+        )}
       </View>
       
       {/* Filtros */}
-      <View style={styles.filterContainer}>
-        {(['hoje', 'semana', 'mes'] as FilterPeriod[]).map((period) => (
-          <TouchableOpacity
-            key={period}
-            style={[styles.filterButton, filter === period && styles.filterActive]}
-            onPress={() => setFilter(period)}
-          >
-            <Text style={[styles.filterText, filter === period && styles.filterTextActive]}>
-              {period === 'hoje' ? 'Hoje' : period === 'semana' ? '7 dias' : '30 dias'}
+      {!selectionMode && (
+        <View style={styles.filterContainer}>
+          {(['hoje', 'semana', 'mes'] as FilterPeriod[]).map((period) => (
+            <TouchableOpacity
+              key={period}
+              style={[styles.filterButton, filter === period && styles.filterActive]}
+              onPress={() => setFilter(period)}
+            >
+              <Text style={[styles.filterText, filter === period && styles.filterTextActive]}>
+                {period === 'hoje' ? 'Hoje' : period === 'semana' ? '7 dias' : '30 dias'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      
+      {/* Total Card */}
+      <View style={[styles.totalCard, selectionMode && styles.totalCardSelection]}>
+        {selectionMode ? (
+          <>
+            <Text style={styles.totalLabel}>Selecionado</Text>
+            <Text style={styles.totalValue}>{formatDurationText(selectedMinutos)}</Text>
+            <Text style={styles.totalSessions}>
+              {selectedCount} {selectedCount === 1 ? 'sessão' : 'sessões'}
             </Text>
-          </TouchableOpacity>
-        ))}
+          </>
+        ) : (
+          <>
+            <Text style={styles.totalLabel}>Total no período</Text>
+            <Text style={styles.totalValue}>{formatDuration(totalMinutos)}</Text>
+            <Text style={styles.totalSessions}>
+              {sessoes.filter(s => s.status === 'finalizada').length} {sessoes.filter(s => s.status === 'finalizada').length === 1 ? 'sessão' : 'sessões'} finalizada(s)
+            </Text>
+          </>
+        )}
       </View>
       
-      {/* Total */}
-      <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Total no período</Text>
-        <Text style={styles.totalValue}>{formatDuration(totalMinutos)}</Text>
-        <Text style={styles.totalSessions}>
-          {sessoes.length} {sessoes.length === 1 ? 'sessão' : 'sessões'}
-        </Text>
-      </View>
+      {/* Botão de Compartilhar (modo seleção) */}
+      {selectionMode && selectedCount > 0 && (
+        <TouchableOpacity style={styles.shareButton} onPress={shareSelected}>
+          <Text style={styles.shareButtonText}>📤 Compartilhar Relatório</Text>
+        </TouchableOpacity>
+      )}
       
       {/* Lista de Sessões */}
       <ScrollView 
@@ -176,9 +324,11 @@ export default function HistoryScreen() {
           </View>
         ) : (
           Object.entries(sessoesPorDia)
-            .sort(([a], [b]) => b.localeCompare(a)) // Mais recente primeiro
+            .sort(([a], [b]) => b.localeCompare(a))
             .map(([dia, sessoesDia]) => {
-              const totalDia = sessoesDia.reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
+              const totalDia = sessoesDia
+                .filter(s => s.status === 'finalizada')
+                .reduce((acc, s) => acc + (s.duracao_minutos || 0), 0);
               
               return (
                 <View key={dia} style={styles.dayGroup}>
@@ -187,32 +337,78 @@ export default function HistoryScreen() {
                     <Text style={styles.dayTotal}>{formatDuration(totalDia)}</Text>
                   </View>
                   
-                  {sessoesDia.map((sessao) => (
-                    <View key={sessao.id} style={styles.sessaoCard}>
-                      <View style={styles.sessaoLeft}>
-                        <View style={styles.timeline}>
-                          <View style={[styles.dot, styles.dotStart]} />
-                          <View style={styles.line} />
-                          <View style={[styles.dot, sessao.fim ? styles.dotEnd : styles.dotActive]} />
+                  {sessoesDia.map((sessao) => {
+                    const isSelected = selectedIds.has(sessao.id);
+                    const isFinalized = sessao.status === 'finalizada';
+                    
+                    return (
+                      <TouchableOpacity
+                        key={sessao.id}
+                        style={[
+                          styles.sessaoCard,
+                          isSelected && styles.sessaoCardSelected,
+                          !isFinalized && styles.sessaoCardPending,
+                        ]}
+                        onPress={() => {
+                          if (selectionMode) {
+                            if (isFinalized) toggleSelection(sessao.id);
+                          } else {
+                            if (isFinalized) shareSingle(sessao);
+                          }
+                        }}
+                        onLongPress={() => {
+                          if (isFinalized) handleLongPress(sessao.id);
+                        }}
+                        delayLongPress={300}
+                      >
+                        {/* Checkbox visual */}
+                        {selectionMode && (
+                          <View style={[
+                            styles.checkbox,
+                            isSelected && styles.checkboxSelected,
+                            !isFinalized && styles.checkboxDisabled,
+                          ]}>
+                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                          </View>
+                        )}
+                        
+                        <View style={styles.sessaoLeft}>
+                          <View style={styles.timeline}>
+                            <View style={[styles.dot, styles.dotStart]} />
+                            <View style={styles.line} />
+                            <View style={[
+                              styles.dot, 
+                              sessao.status === 'finalizada' ? styles.dotEnd : 
+                              sessao.status === 'pausada' ? styles.dotPaused : styles.dotActive
+                            ]} />
+                          </View>
+                          <View style={styles.times}>
+                            <Text style={styles.time}>{formatTime(sessao.inicio)}</Text>
+                            <Text style={styles.time}>
+                              {sessao.fim ? formatTime(sessao.fim) : '...'}
+                            </Text>
+                          </View>
                         </View>
-                        <View style={styles.times}>
-                          <Text style={styles.time}>{formatTime(sessao.inicio)}</Text>
-                          <Text style={styles.time}>
-                            {sessao.fim ? formatTime(sessao.fim) : '...'}
-                          </Text>
+                        
+                        <View style={styles.sessaoRight}>
+                          <Text style={styles.sessaoLocal}>{sessao.local_nome || 'Local'}</Text>
+                          <View style={styles.sessaoFooter}>
+                            <Text style={[
+                              styles.sessaoDuracao, 
+                              !isFinalized && styles.emAndamento
+                            ]}>
+                              {isFinalized 
+                                ? formatDuration(sessao.duracao_minutos || 0)
+                                : sessao.status === 'pausada' ? '⏸️ Pausada' : '⏳ Em andamento'}
+                            </Text>
+                            {!selectionMode && isFinalized && (
+                              <Text style={styles.shareHint}>📤</Text>
+                            )}
+                          </View>
                         </View>
-                      </View>
-                      
-                      <View style={styles.sessaoRight}>
-                        <Text style={styles.sessaoLocal}>{sessao.local_nome || 'Local'}</Text>
-                        <Text style={[styles.sessaoDuracao, !sessao.fim && styles.emAndamento]}>
-                          {sessao.duracao_minutos 
-                            ? formatDuration(sessao.duracao_minutos)
-                            : '⏳ Em andamento'}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               );
             })
@@ -242,6 +438,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    fontSize: 16,
+    color: colors.error,
+    fontWeight: '600',
+  },
+  selectionCount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  selectAllButton: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
   },
   filterContainer: {
     flexDirection: 'row',
@@ -275,6 +491,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
   },
+  totalCardSelection: {
+    backgroundColor: '#10B981',
+  },
   totalLabel: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
@@ -288,6 +507,19 @@ const styles = StyleSheet.create({
   totalSessions: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
+  },
+  shareButton: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    backgroundColor: '#10B981',
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   scrollView: {
     flex: 1,
@@ -339,6 +571,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 12,
     padding: 16,
+    alignItems: 'center',
+  },
+  sessaoCardSelected: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  sessaoCardPending: {
+    opacity: 0.7,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: colors.border,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxSelected: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  checkboxDisabled: {
+    opacity: 0.3,
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
   sessaoLeft: {
     flexDirection: 'row',
@@ -360,8 +623,11 @@ const styles = StyleSheet.create({
   dotEnd: {
     backgroundColor: colors.error,
   },
-  dotActive: {
+  dotPaused: {
     backgroundColor: '#F59E0B',
+  },
+  dotActive: {
+    backgroundColor: '#3B82F6',
   },
   line: {
     flex: 1,
@@ -387,6 +653,11 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 4,
   },
+  sessaoFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   sessaoDuracao: {
     fontSize: 14,
     color: colors.primary,
@@ -394,5 +665,9 @@ const styles = StyleSheet.create({
   },
   emAndamento: {
     color: '#F59E0B',
+  },
+  shareHint: {
+    fontSize: 14,
+    opacity: 0.5,
   },
 });
