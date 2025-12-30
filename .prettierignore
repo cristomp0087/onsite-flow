@@ -1,8 +1,10 @@
 node_modules
-dist
 .next
 .expo
-.turbo
+dist
+build
 coverage
-*.lock
 pnpm-lock.yaml
+package-lock.json
+*.min.js
+*.min.css

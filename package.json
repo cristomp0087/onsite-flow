@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "engines": {
     "node": ">=20.0.0",
-    "pnpm": ">=8.0.0"
+    "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@9.1.0",
   "scripts": {
@@ -21,16 +21,21 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "prepare": "husky install",
     "test": "turbo test",
-    "validate": "pnpm lint && pnpm typecheck && pnpm format:check && echo '✅ VALIDAÇÃO COMPLETA'"
+    "validate": "turbo lint typecheck && pnpm format:check"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
     "eslint": "^8.56.0",
-    "husky": "^8.0.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^8.0.3",
     "lint-staged": "^15.2.0",
     "prettier": "^3.2.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.3"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [

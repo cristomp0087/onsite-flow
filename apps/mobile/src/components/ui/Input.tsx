@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  TextInput, 
-  Text, 
+import {
+  View,
+  TextInput,
+  Text,
   StyleSheet,
   TouchableOpacity,
   TextInputProps,
@@ -16,28 +16,30 @@ interface InputProps extends TextInputProps {
   rightIcon?: React.ReactNode;
 }
 
-export function Input({ 
-  label, 
-  error, 
+export function Input({
+  label,
+  error,
   leftIcon,
   rightIcon,
   secureTextEntry,
-  ...props 
+  ...props
 }: InputProps) {
   const [isSecure, setIsSecure] = useState(secureTextEntry);
   const [isFocused, setIsFocused] = useState(false);
-  
+
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
-      
-      <View style={[
-        styles.inputContainer,
-        isFocused && styles.focused,
-        error && styles.errorBorder,
-      ]}>
+
+      <View
+        style={[
+          styles.inputContainer,
+          isFocused && styles.focused,
+          error && styles.errorBorder,
+        ]}
+      >
         {leftIcon && <View style={styles.icon}>{leftIcon}</View>}
-        
+
         <TextInput
           style={styles.input}
           placeholderTextColor={colors.textTertiary}
@@ -46,19 +48,19 @@ export function Input({
           onBlur={() => setIsFocused(false)}
           {...props}
         />
-        
+
         {secureTextEntry && (
-          <TouchableOpacity 
-            style={styles.icon} 
+          <TouchableOpacity
+            style={styles.icon}
             onPress={() => setIsSecure(!isSecure)}
           >
             <Text style={styles.showHide}>{isSecure ? '👁️' : '🙈'}</Text>
           </TouchableOpacity>
         )}
-        
+
         {rightIcon && <View style={styles.icon}>{rightIcon}</View>}
       </View>
-      
+
       {error && <Text style={styles.error}>{error}</Text>}
     </View>
   );

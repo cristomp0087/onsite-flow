@@ -1,5 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, AppState, Alert, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  AppState,
+  Alert,
+  ScrollView,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useLocationStore } from '../../src/stores/locationStore';
@@ -9,12 +16,15 @@ import { useSettingsStore } from '../../src/stores/settingsStore';
 import { logger } from '../../src/lib/logger';
 import { colors } from '../../src/constants/colors';
 import { Button } from '../../src/components/ui/Button';
-import { GeofenceAlert, type GeofenceAlertData } from '../../src/components/GeofenceAlert';
+import {
+  GeofenceAlert,
+  type GeofenceAlertData,
+} from '../../src/components/GeofenceAlert';
 
 export default function HomeScreen() {
   const { user } = useAuthStore();
-  const { 
-    initialize: initLocation, 
+  const {
+    initialize: initLocation,
     isGeofencingActive,
     currentLocation,
     accuracy,
@@ -22,7 +32,7 @@ export default function HomeScreen() {
     activeGeofence,
     isInitialized: locationInitialized,
   } = useLocationStore();
-  
+
   // Configurações personalizáveis
   const {
     exitTimeOption1,
@@ -30,7 +40,7 @@ export default function HomeScreen() {
     entryDelayOption,
     autoActionTimeout,
   } = useSettingsStore();
-  
+
   const {
     initialize: initRegistros,
     estatisticasHoje,
@@ -42,8 +52,8 @@ export default function HomeScreen() {
     registrarSaida,
     isInitialized: registroInitialized,
   } = useRegistroStore();
-  
-  const { 
+
+  const {
     initialize: initWorkSession,
     startTimer,
     pauseTimer,
@@ -57,36 +67,36 @@ export default function HomeScreen() {
     scheduleDelayedStop,
     isInitialized: workSessionInitialized,
   } = useWorkSessionStore();
-  
+
   // Tempo em SEGUNDOS para precisão
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isInitializing, setIsInitializing] = useState(true);
-  
+
   // Estado do alert grande
   const [alertData, setAlertData] = useState<GeofenceAlertData | null>(null);
   const [showAlert, setShowAlert] = useState(false);
-  
-  const activeLocal = locais.find(l => l.id === activeGeofence);
+
+  const activeLocal = locais.find((l) => l.id === activeGeofence);
   const isInsideGeofence = !!activeGeofence;
   const isWorking = sessaoAtual && sessaoAtual.status !== 'finalizada';
   const isPaused = sessaoAtual?.status === 'pausada';
-  
+
   // Inicialização completa
   useEffect(() => {
     const initializeAll = async () => {
       try {
         logger.info('home', 'Starting full initialization...');
         setIsInitializing(true);
-        
+
         // 1. Inicializar banco de dados e registros
         await initRegistros();
-        
+
         // 2. Inicializar workSessionStore (notificações)
         await initWorkSession();
-        
+
         // 3. Inicializar localização (vai auto-iniciar monitoramento se necessário)
         await initLocation();
-        
+
         logger.info('home', 'Full initialization complete');
       } catch (error) {
         logger.error('home', 'Initialization error', { error });
@@ -94,10 +104,10 @@ export default function HomeScreen() {
         setIsInitializing(false);
       }
     };
-    
+
     initializeAll();
   }, []);
-  
+
   // Mostrar alert quando há pending entry ou exit
   useEffect(() => {
     if (pendingEntry) {
@@ -133,7 +143,7 @@ export default function HomeScreen() {
       setAlertData(null);
     }
   }, [pendingEntry, pendingExit]);
-  
+
   // Handlers do Alert - ENTRADA
   const handleAlertStart = useCallback(async () => {
     if (!pendingEntry) return;
@@ -142,21 +152,25 @@ export default function HomeScreen() {
     clearPending();
     refreshData();
   }, [pendingEntry, startTimer, clearPending, refreshData]);
-  
+
   const handleAlertDelayEntry = useCallback(async () => {
     if (!pendingEntry) return;
     setShowAlert(false);
-    await scheduleDelayedStart(pendingEntry.localId, pendingEntry.localNome, entryDelayOption);
+    await scheduleDelayedStart(
+      pendingEntry.localId,
+      pendingEntry.localNome,
+      entryDelayOption
+    );
     clearPending();
   }, [pendingEntry, scheduleDelayedStart, clearPending, entryDelayOption]);
-  
+
   const handleAlertSkipToday = useCallback(() => {
     if (!pendingEntry) return;
     setShowAlert(false);
     addToSkippedToday(pendingEntry.localId);
     clearPending();
   }, [pendingEntry, addToSkippedToday, clearPending]);
-  
+
   // Handlers do Alert - SAÍDA
   const handleAlertStop = useCallback(async () => {
     if (!pendingExit) return;
@@ -165,48 +179,72 @@ export default function HomeScreen() {
     clearPending();
     refreshData();
   }, [pendingExit, stopTimer, clearPending, refreshData]);
-  
+
   const handleAlertStopAgo1 = useCallback(async () => {
     if (!pendingExit) return;
     setShowAlert(false);
     // Encerrar com desconto de X minutos (configurável)
-    scheduleDelayedStop(pendingExit.localId, pendingExit.localNome, exitTimeOption1, pendingExit.coords);
+    scheduleDelayedStop(
+      pendingExit.localId,
+      pendingExit.localNome,
+      exitTimeOption1,
+      pendingExit.coords
+    );
     clearPending();
     refreshData();
-  }, [pendingExit, clearPending, refreshData, exitTimeOption1, scheduleDelayedStop]);
-  
+  }, [
+    pendingExit,
+    clearPending,
+    refreshData,
+    exitTimeOption1,
+    scheduleDelayedStop,
+  ]);
+
   const handleAlertStopAgo2 = useCallback(async () => {
     if (!pendingExit) return;
     setShowAlert(false);
     // Encerrar com desconto de X minutos (configurável)
-    scheduleDelayedStop(pendingExit.localId, pendingExit.localNome, exitTimeOption2, pendingExit.coords);
+    scheduleDelayedStop(
+      pendingExit.localId,
+      pendingExit.localNome,
+      exitTimeOption2,
+      pendingExit.coords
+    );
     clearPending();
     refreshData();
-  }, [pendingExit, clearPending, refreshData, exitTimeOption2, scheduleDelayedStop]);
-  
+  }, [
+    pendingExit,
+    clearPending,
+    refreshData,
+    exitTimeOption2,
+    scheduleDelayedStop,
+  ]);
+
   const handleAlertDismiss = useCallback(() => {
     setShowAlert(false);
     // Não limpa pending - vai continuar o countdown via notificação do sistema
   }, []);
-  
+
   // Cronômetro em tempo real - APENAS SESSÃO ATUAL
   useEffect(() => {
     let timer: NodeJS.Timeout | null = null;
-    
+
     const updateTime = () => {
       if (!sessaoAtual) {
         // Sem sessão ativa - mostrar ZERO (não total do dia)
         setElapsedSeconds(0);
         return;
       }
-      
+
       const inicio = new Date(sessaoAtual.inicio);
       const agora = new Date();
-      const diffSeconds = Math.floor((agora.getTime() - inicio.getTime()) / 1000);
-      
+      const diffSeconds = Math.floor(
+        (agora.getTime() - inicio.getTime()) / 1000
+      );
+
       // Tempo pausado (em segundos)
       const tempoPausado = (sessaoAtual.tempo_pausado_minutos || 0) * 60;
-      
+
       if (sessaoAtual.status === 'ativa') {
         // Mostrar APENAS tempo desta sessão
         setElapsedSeconds(Math.max(0, diffSeconds - tempoPausado));
@@ -218,19 +256,19 @@ export default function HomeScreen() {
         setElapsedSeconds(0);
       }
     };
-    
+
     if (sessaoAtual && sessaoAtual.status === 'ativa') {
       updateTime();
       timer = setInterval(updateTime, 1000); // Atualiza a cada segundo
     } else {
       updateTime();
     }
-    
+
     return () => {
       if (timer) clearInterval(timer);
     };
   }, [sessaoAtual]);
-  
+
   // Refresh quando app volta pro foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
@@ -240,87 +278,103 @@ export default function HomeScreen() {
     });
     return () => subscription.remove();
   }, []);
-  
+
   // Formatar tempo com horas, minutos E segundos
   const formatTimeWithSeconds = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    
+
     return `${hours}h ${minutes.toString().padStart(2, '0')}m ${seconds.toString().padStart(2, '0')}s`;
   };
-  
+
   // Formatar só horas e minutos (para exibição compacta)
   const formatTimeCompact = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     return `${hours}h ${minutes.toString().padStart(2, '0')}min`;
   };
-  
+
   // Iniciar manualmente
   const handleStart = async () => {
     if (!activeGeofence) {
-      Alert.alert('Aviso', 'Você precisa estar dentro de um local de trabalho para iniciar.');
+      Alert.alert(
+        'Aviso',
+        'Você precisa estar dentro de um local de trabalho para iniciar.'
+      );
       return;
     }
-    
-    await startTimer(activeGeofence, currentLocation ? {
-      latitude: currentLocation.latitude,
-      longitude: currentLocation.longitude,
-      accuracy: accuracy || undefined,
-    } : undefined);
-    
+
+    await startTimer(
+      activeGeofence,
+      currentLocation
+        ? {
+            latitude: currentLocation.latitude,
+            longitude: currentLocation.longitude,
+            accuracy: accuracy || undefined,
+          }
+        : undefined
+    );
+
     refreshData();
   };
-  
+
   // Pausar
   const handlePause = () => {
     pausar();
   };
-  
+
   // Retomar
   const handleResume = () => {
     retomar();
   };
-  
+
   // Encerrar - CORRIGIDO
   const handleStop = () => {
     if (!sessaoAtual) return;
-    
+
     Alert.alert(
       'Encerrar Cronômetro',
       'Deseja encerrar e finalizar o registro?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Encerrar', 
+        {
+          text: 'Encerrar',
           style: 'destructive',
           onPress: async () => {
             try {
-              logger.info('home', 'Encerrar pressed - stopping session', { 
-                localId: sessaoAtual.local_id 
+              logger.info('home', 'Encerrar pressed - stopping session', {
+                localId: sessaoAtual.local_id,
               });
-              
-              await registrarSaida(sessaoAtual.local_id, currentLocation ? {
-                latitude: currentLocation.latitude,
-                longitude: currentLocation.longitude,
-                accuracy: accuracy || undefined,
-              } : undefined);
-              
+
+              await registrarSaida(
+                sessaoAtual.local_id,
+                currentLocation
+                  ? {
+                      latitude: currentLocation.latitude,
+                      longitude: currentLocation.longitude,
+                      accuracy: accuracy || undefined,
+                    }
+                  : undefined
+              );
+
               // Forçar refresh após encerrar
               await refreshData();
-              
+
               logger.info('home', 'Session stopped successfully');
             } catch (error) {
               logger.error('home', 'Error stopping session', { error });
-              Alert.alert('Erro', 'Não foi possível encerrar a sessão. Tente novamente.');
+              Alert.alert(
+                'Erro',
+                'Não foi possível encerrar a sessão. Tente novamente.'
+              );
             }
-          }
+          },
         },
       ]
     );
   };
-  
+
   if (isInitializing) {
     return (
       <SafeAreaView style={styles.container}>
@@ -330,7 +384,7 @@ export default function HomeScreen() {
       </SafeAreaView>
     );
   }
-  
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Alert grande estilo despertador */}
@@ -342,27 +396,39 @@ export default function HomeScreen() {
         exitAgoMinutes1={exitTimeOption1}
         exitAgoMinutes2={exitTimeOption2}
       />
-      
+
       <ScrollView>
         <View style={styles.header}>
           <Text style={styles.greeting}>👋 Olá!</Text>
           <Text style={styles.email}>{user?.email}</Text>
         </View>
-        
+
         {/* Status Card */}
-        <View style={[styles.card, isWorking && !isPaused && styles.activeCard, isPaused && styles.pausedCard]}>
+        <View
+          style={[
+            styles.card,
+            isWorking && !isPaused && styles.activeCard,
+            isPaused && styles.pausedCard,
+          ]}
+        >
           <Text style={styles.cardTitle}>📍 Status</Text>
-          
+
           {isWorking ? (
             <>
               <Text style={[styles.statusText, isPaused && styles.pausedText]}>
                 {isPaused ? '⏸️ PAUSADO' : '🟢 TRABALHANDO'}
               </Text>
-              <Text style={styles.localName}>{sessaoAtual?.local_nome || activeLocal?.nome || 'Local'}</Text>
-              <Text style={styles.sinceText}>
-                Desde {new Date(sessaoAtual!.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              <Text style={styles.localName}>
+                {sessaoAtual?.local_nome || activeLocal?.nome || 'Local'}
               </Text>
-              
+              <Text style={styles.sinceText}>
+                Desde{' '}
+                {new Date(sessaoAtual!.inicio).toLocaleTimeString('pt-BR', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+
               {/* Botões de controle */}
               <View style={styles.controlButtons}>
                 {isPaused ? (
@@ -390,7 +456,9 @@ export default function HomeScreen() {
           ) : (
             <>
               <Text style={styles.inactiveText}>
-                {isInsideGeofence ? 'Pronto para trabalhar' : 'Fora do local de trabalho'}
+                {isInsideGeofence
+                  ? 'Pronto para trabalhar'
+                  : 'Fora do local de trabalho'}
               </Text>
               {isInsideGeofence && (
                 <>
@@ -403,29 +471,34 @@ export default function HomeScreen() {
                 </>
               )}
               {!isInsideGeofence && locais.length === 0 && (
-                <Text style={styles.hint}>Vá até a aba Mapa para adicionar locais</Text>
+                <Text style={styles.hint}>
+                  Vá até a aba Mapa para adicionar locais
+                </Text>
               )}
             </>
           )}
         </View>
-        
+
         {/* Horas Card - COM SEGUNDOS */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>⏱️ Hoje</Text>
-          <Text style={[styles.bigNumber, isWorking && !isPaused && styles.activeNumber]}>
+          <Text
+            style={[
+              styles.bigNumber,
+              isWorking && !isPaused && styles.activeNumber,
+            ]}
+          >
             {formatTimeWithSeconds(elapsedSeconds)}
           </Text>
           {isWorking && !isPaused && (
             <Text style={styles.runningIndicator}>● Cronômetro rodando...</Text>
           )}
-          {isPaused && (
-            <Text style={styles.pausedIndicator}>⏸️ Pausado</Text>
-          )}
+          {isPaused && <Text style={styles.pausedIndicator}>⏸️ Pausado</Text>}
           {!isWorking && sessoesHoje.length === 0 && (
             <Text style={styles.hint}>Nenhum registro hoje</Text>
           )}
         </View>
-        
+
         {/* Sessões de Hoje */}
         {sessoesHoje.length > 0 && (
           <View style={styles.card}>
@@ -433,42 +506,53 @@ export default function HomeScreen() {
             {sessoesHoje.slice(0, 5).map((sessao) => (
               <View key={sessao.id} style={styles.sessaoItem}>
                 <View style={styles.sessaoInfo}>
-                  <Text style={styles.sessaoLocal}>{sessao.local_nome || 'Local'}</Text>
+                  <Text style={styles.sessaoLocal}>
+                    {sessao.local_nome || 'Local'}
+                  </Text>
                   <Text style={styles.sessaoTime}>
-                    {new Date(sessao.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                    {sessao.fim 
+                    {new Date(sessao.inicio).toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                    {sessao.fim
                       ? ` - ${new Date(sessao.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
                       : ' - agora'}
                   </Text>
                 </View>
-                <Text style={[
-                  styles.sessaoDuracao,
-                  sessao.status === 'pausada' && styles.pausedDuracao,
-                  sessao.status === 'ativa' && styles.activeDuracao,
-                ]}>
-                  {sessao.status === 'finalizada' 
+                <Text
+                  style={[
+                    styles.sessaoDuracao,
+                    sessao.status === 'pausada' && styles.pausedDuracao,
+                    sessao.status === 'ativa' && styles.activeDuracao,
+                  ]}
+                >
+                  {sessao.status === 'finalizada'
                     ? formatTimeCompact((sessao.duracao_minutos || 0) * 60)
-                    : sessao.status === 'pausada' ? '⏸️' : '⏳'}
+                    : sessao.status === 'pausada'
+                      ? '⏸️'
+                      : '⏳'}
                 </Text>
               </View>
             ))}
           </View>
         )}
-        
+
         {/* GPS Info */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>🛰️ GPS</Text>
           <View style={styles.gpsRow}>
             <Text style={styles.gpsLabel}>Localização:</Text>
             <Text style={styles.gpsValue}>
-              {currentLocation 
+              {currentLocation
                 ? `${currentLocation.latitude.toFixed(4)}, ${currentLocation.longitude.toFixed(4)}`
                 : 'Obtendo...'}
             </Text>
           </View>
           <View style={styles.gpsRow}>
             <Text style={styles.gpsLabel}>Monitoramento:</Text>
-            <Text style={[styles.gpsValue, isGeofencingActive && styles.activeGps]}>
+            <Text
+              style={[styles.gpsValue, isGeofencingActive && styles.activeGps]}
+            >
               {isGeofencingActive ? '🟢 Ativo' : '⚫ Inativo'}
             </Text>
           </View>
@@ -478,7 +562,7 @@ export default function HomeScreen() {
             </Text>
           )}
         </View>
-        
+
         <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>

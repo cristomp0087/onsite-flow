@@ -14,17 +14,23 @@ Notifications.setNotificationHandler({
 // ============================================
 // Tipos
 // ============================================
-export type NotificationAction = 
-  | 'start' 
-  | 'skip_today' 
-  | 'delay_10min' 
-  | 'stop' 
-  | 'pause' 
-  | 'continue' 
+export type NotificationAction =
+  | 'start'
+  | 'skip_today'
+  | 'delay_10min'
+  | 'stop'
+  | 'pause'
+  | 'continue'
   | 'timeout';
 
 export interface GeofenceNotificationData {
-  type: 'geofence_enter' | 'geofence_exit' | 'auto_start' | 'auto_pause' | 'auto_resume' | 'reminder';
+  type:
+    | 'geofence_enter'
+    | 'geofence_exit'
+    | 'auto_start'
+    | 'auto_pause'
+    | 'auto_resume'
+    | 'reminder';
   localId: string;
   localNome: string;
   action?: NotificationAction;
@@ -35,19 +41,20 @@ export interface GeofenceNotificationData {
 // ============================================
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    const { status: existingStatus } =
+      await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-    
+
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    
+
     if (finalStatus !== 'granted') {
       logger.warn('notifications', 'Permission not granted');
       return false;
     }
-    
+
     // Configurar canal no Android
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('geofence', {
@@ -57,7 +64,7 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         lightColor: '#3B82F6',
       });
     }
-    
+
     logger.info('notifications', 'Permissions granted');
     return true;
   } catch (error) {
@@ -89,7 +96,7 @@ export async function setupNotificationCategories(): Promise<void> {
         options: { opensAppToForeground: false },
       },
     ]);
-    
+
     // Categoria para saída do geofence - ATUALIZADA
     await Notifications.setNotificationCategoryAsync('geofence_exit', [
       {
@@ -108,7 +115,7 @@ export async function setupNotificationCategories(): Promise<void> {
         options: { opensAppToForeground: false },
       },
     ]);
-    
+
     logger.info('notifications', 'Notification categories configured');
   } catch (error) {
     logger.error('notifications', 'Error setting up categories', { error });
@@ -137,11 +144,16 @@ export async function showGeofenceEnterNotification(
       },
       trigger: null, // Imediato
     });
-    
-    logger.info('notifications', 'Enter notification shown', { localNome, notificationId });
+
+    logger.info('notifications', 'Enter notification shown', {
+      localNome,
+      notificationId,
+    });
     return notificationId;
   } catch (error) {
-    logger.error('notifications', 'Error showing enter notification', { error });
+    logger.error('notifications', 'Error showing enter notification', {
+      error,
+    });
     return '';
   }
 }
@@ -168,8 +180,11 @@ export async function showGeofenceExitNotification(
       },
       trigger: null,
     });
-    
-    logger.info('notifications', 'Exit notification shown', { localNome, notificationId });
+
+    logger.info('notifications', 'Exit notification shown', {
+      localNome,
+      notificationId,
+    });
     return notificationId;
   } catch (error) {
     logger.error('notifications', 'Error showing exit notification', { error });
@@ -180,63 +195,87 @@ export async function showGeofenceExitNotification(
 // ============================================
 // Mostrar Notificação de Auto-Início
 // ============================================
-export async function showAutoStartNotification(localNome: string): Promise<void> {
+export async function showAutoStartNotification(
+  localNome: string
+): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `⏱️ Cronômetro iniciado`,
         body: `Você está trabalhando em ${localNome}`,
-        data: { type: 'auto_start', localId: '', localNome } as GeofenceNotificationData,
+        data: {
+          type: 'auto_start',
+          localId: '',
+          localNome,
+        } as GeofenceNotificationData,
         sound: 'default',
       },
       trigger: null,
     });
-    
+
     logger.info('notifications', 'Auto-start notification shown');
   } catch (error) {
-    logger.error('notifications', 'Error showing auto-start notification', { error });
+    logger.error('notifications', 'Error showing auto-start notification', {
+      error,
+    });
   }
 }
 
 // ============================================
 // Mostrar Notificação de Auto-Pausa - NOVA
 // ============================================
-export async function showAutoPauseNotification(localNome: string): Promise<void> {
+export async function showAutoPauseNotification(
+  localNome: string
+): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `⏸️ Cronômetro pausado`,
         body: `Você saiu de ${localNome}. Voltará a contar quando você retornar.`,
-        data: { type: 'auto_pause', localId: '', localNome } as GeofenceNotificationData,
+        data: {
+          type: 'auto_pause',
+          localId: '',
+          localNome,
+        } as GeofenceNotificationData,
         sound: 'default',
       },
       trigger: null,
     });
-    
+
     logger.info('notifications', 'Auto-pause notification shown');
   } catch (error) {
-    logger.error('notifications', 'Error showing auto-pause notification', { error });
+    logger.error('notifications', 'Error showing auto-pause notification', {
+      error,
+    });
   }
 }
 
 // ============================================
 // Mostrar Notificação de Auto-Retomada - NOVA
 // ============================================
-export async function showAutoResumeNotification(localNome: string): Promise<void> {
+export async function showAutoResumeNotification(
+  localNome: string
+): Promise<void> {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `▶️ Cronômetro retomado`,
         body: `Você voltou para ${localNome}. Continuando a contar suas horas.`,
-        data: { type: 'auto_resume', localId: '', localNome } as GeofenceNotificationData,
+        data: {
+          type: 'auto_resume',
+          localId: '',
+          localNome,
+        } as GeofenceNotificationData,
         sound: 'default',
       },
       trigger: null,
     });
-    
+
     logger.info('notifications', 'Auto-resume notification shown');
   } catch (error) {
-    logger.error('notifications', 'Error showing auto-resume notification', { error });
+    logger.error('notifications', 'Error showing auto-resume notification', {
+      error,
+    });
   }
 }
 
@@ -265,8 +304,11 @@ export async function scheduleDelayedStart(
         seconds: delayMinutes * 60,
       },
     });
-    
-    logger.info('notifications', `Delayed start scheduled for ${delayMinutes} minutes`);
+
+    logger.info(
+      'notifications',
+      `Delayed start scheduled for ${delayMinutes} minutes`
+    );
     return notificationId;
   } catch (error) {
     logger.error('notifications', 'Error scheduling delayed start', { error });
@@ -277,9 +319,11 @@ export async function scheduleDelayedStart(
 // ============================================
 // Cancelar Notificação
 // ============================================
-export async function cancelNotification(notificationId: string): Promise<void> {
+export async function cancelNotification(
+  notificationId: string
+): Promise<void> {
   if (!notificationId) return;
-  
+
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
     logger.debug('notifications', 'Notification cancelled', { notificationId });
@@ -296,7 +340,9 @@ export async function cancelAllNotifications(): Promise<void> {
     await Notifications.cancelAllScheduledNotificationsAsync();
     logger.debug('notifications', 'All notifications cancelled');
   } catch (error) {
-    logger.error('notifications', 'Error cancelling all notifications', { error });
+    logger.error('notifications', 'Error cancelling all notifications', {
+      error,
+    });
   }
 }
 

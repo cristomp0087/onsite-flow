@@ -29,14 +29,14 @@ interface HoursChartProps {
 
 export function HoursChart({ data, title = 'Horas por Dia' }: HoursChartProps) {
   const chartData = {
-    labels: data.map(d => {
+    labels: data.map((d) => {
       const date = parseISO(d.data);
       return format(date, 'dd/MM', { locale: ptBR });
     }),
     datasets: [
       {
         label: 'Horas',
-        data: data.map(d => Number(d.horas.toFixed(1))),
+        data: data.map((d) => Number(d.horas.toFixed(1))),
         backgroundColor: 'rgba(14, 165, 233, 0.8)',
         borderColor: 'rgba(14, 165, 233, 1)',
         borderWidth: 1,

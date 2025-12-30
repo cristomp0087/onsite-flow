@@ -25,10 +25,10 @@ export interface ReportByLocal {
  */
 export function groupSessionsByLocal(sessoes: SessaoDB[]): ReportByLocal[] {
   const grouped: Record<string, ReportByLocal> = {};
-  
+
   for (const sessao of sessoes) {
     const localNome = sessao.local_nome || 'Local não identificado';
-    
+
     if (!grouped[localNome]) {
       grouped[localNome] = {
         localNome,
@@ -36,26 +36,29 @@ export function groupSessionsByLocal(sessoes: SessaoDB[]): ReportByLocal[] {
         subtotal: 0,
       };
     }
-    
+
     const data = sessao.inicio.split('T')[0];
-    const entrada = new Date(sessao.inicio).toLocaleTimeString('pt-BR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    const entrada = new Date(sessao.inicio).toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit',
     });
-    const saida = sessao.fim 
-      ? new Date(sessao.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    const saida = sessao.fim
+      ? new Date(sessao.fim).toLocaleTimeString('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
       : 'Em andamento';
     const duracao = sessao.duracao_minutos || 0;
-    
+
     grouped[localNome].sessoes.push({ data, entrada, saida, duracao });
     grouped[localNome].subtotal += duracao;
   }
-  
+
   // Ordenar sessões dentro de cada local por data
   for (const local of Object.values(grouped)) {
     local.sessoes.sort((a, b) => a.data.localeCompare(b.data));
   }
-  
+
   // Retornar ordenado por subtotal (maior primeiro)
   return Object.values(grouped).sort((a, b) => b.subtotal - a.subtotal);
 }
@@ -66,11 +69,11 @@ export function groupSessionsByLocal(sessoes: SessaoDB[]): ReportByLocal[] {
 export function formatDurationText(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  
+
   if (hours === 0) {
     return `${mins}min`;
   }
-  
+
   return `${hours}h ${mins.toString().padStart(2, '0')}min`;
 }
 
@@ -97,22 +100,22 @@ export function formatPeriod(dataInicio: string, dataFim: string): string {
  */
 export function generateTextReport(data: ReportData): string {
   const { sessoes, dataInicio, dataFim, userEmail, userName } = data;
-  
+
   if (sessoes.length === 0) {
     return 'Nenhuma sessão encontrada no período selecionado.';
   }
-  
+
   const grouped = groupSessionsByLocal(sessoes);
   const totalGeral = grouped.reduce((acc, g) => acc + g.subtotal, 0);
   const totalSessoes = sessoes.length;
-  
+
   let report = '';
-  
+
   // Cabeçalho
   report += '═══════════════════════════════\n';
   report += '       RELATÓRIO DE HORAS      \n';
   report += '═══════════════════════════════\n\n';
-  
+
   // Info do período
   report += `📅 Período: ${formatPeriod(dataInicio, dataFim)}\n`;
   if (userName) {
@@ -122,33 +125,34 @@ export function generateTextReport(data: ReportData): string {
   }
   report += `📊 Total de registros: ${totalSessoes}\n`;
   report += '\n';
-  
+
   // Sessões por local
   for (const local of grouped) {
     report += `───────────────────────────────\n`;
     report += `📍 ${local.localNome.toUpperCase()}\n`;
     report += `───────────────────────────────\n`;
-    
+
     for (const sessao of local.sessoes) {
-      const duracaoStr = sessao.duracao > 0 
-        ? formatDurationText(sessao.duracao)
-        : '(em andamento)';
+      const duracaoStr =
+        sessao.duracao > 0
+          ? formatDurationText(sessao.duracao)
+          : '(em andamento)';
       report += `  ${formatDateBR(sessao.data)}  ${sessao.entrada} → ${sessao.saida}  [${duracaoStr}]\n`;
     }
-    
+
     report += `  ─────────────────────────────\n`;
     report += `  Subtotal: ${formatDurationText(local.subtotal)}\n\n`;
   }
-  
+
   // Total geral
   report += '═══════════════════════════════\n';
   report += `   TOTAL GERAL: ${formatDurationText(totalGeral)}\n`;
   report += '═══════════════════════════════\n\n';
-  
+
   // Rodapé
   report += `Gerado por OnSite Flow\n`;
   report += `${new Date().toLocaleString('pt-BR')}\n`;
-  
+
   return report;
 }
 
@@ -157,39 +161,45 @@ export function generateTextReport(data: ReportData): string {
  */
 export function generateSummaryReport(data: ReportData): string {
   const { sessoes, dataInicio, dataFim } = data;
-  
+
   if (sessoes.length === 0) {
     return 'Nenhuma sessão selecionada.';
   }
-  
+
   const grouped = groupSessionsByLocal(sessoes);
   const totalGeral = grouped.reduce((acc, g) => acc + g.subtotal, 0);
-  
+
   let summary = `📅 ${formatPeriod(dataInicio, dataFim)}\n\n`;
-  
+
   for (const local of grouped) {
     summary += `📍 ${local.localNome}: ${formatDurationText(local.subtotal)}\n`;
   }
-  
+
   summary += `\n💰 Total: ${formatDurationText(totalGeral)}`;
-  
+
   return summary;
 }
 
 /**
  * Gera relatório de uma única sessão
  */
-export function generateSingleSessionReport(sessao: SessaoDB, userEmail?: string): string {
+export function generateSingleSessionReport(
+  sessao: SessaoDB,
+  userEmail?: string
+): string {
   const data = sessao.inicio.split('T')[0];
-  const entrada = new Date(sessao.inicio).toLocaleTimeString('pt-BR', { 
-    hour: '2-digit', 
-    minute: '2-digit' 
+  const entrada = new Date(sessao.inicio).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
   });
-  const saida = sessao.fim 
-    ? new Date(sessao.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  const saida = sessao.fim
+    ? new Date(sessao.fim).toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : 'Em andamento';
   const duracao = sessao.duracao_minutos || 0;
-  
+
   let report = '';
   report += '───────────────────────────────\n';
   report += '     REGISTRO DE TRABALHO      \n';
@@ -204,6 +214,6 @@ export function generateSingleSessionReport(sessao: SessaoDB, userEmail?: string
   }
   report += '\n───────────────────────────────\n';
   report += `OnSite Flow • ${new Date().toLocaleString('pt-BR')}\n`;
-  
+
   return report;
 }

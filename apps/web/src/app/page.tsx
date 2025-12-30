@@ -8,29 +8,29 @@ import { MapPin, Loader2 } from 'lucide-react';
 export default function LoginPage() {
   const router = useRouter();
   const { user, isLoading, isInitialized, initialize, signIn } = useAuthStore();
-  
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   useEffect(() => {
     initialize();
   }, [initialize]);
-  
+
   useEffect(() => {
     if (isInitialized && user) {
       router.push('/dashboard');
     }
   }, [isInitialized, user, router]);
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsSubmitting(true);
-    
+
     const { error } = await signIn(email, password);
-    
+
     if (error) {
       setError('Email ou senha incorretos');
       setIsSubmitting(false);
@@ -38,7 +38,7 @@ export default function LoginPage() {
       router.push('/dashboard');
     }
   };
-  
+
   if (!isInitialized || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -46,7 +46,7 @@ export default function LoginPage() {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 p-4">
       <div className="w-full max-w-md">
@@ -58,16 +58,19 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold text-gray-900">OnSite Flow</h1>
           <p className="text-gray-600 mt-1">Gerenciador de Horas</p>
         </div>
-        
+
         {/* Card de Login */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">
             Entrar na sua conta
           </h2>
-          
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Email
               </label>
               <input
@@ -80,9 +83,12 @@ export default function LoginPage() {
                 required
               />
             </div>
-            
+
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
                 Senha
               </label>
               <input
@@ -95,13 +101,13 @@ export default function LoginPage() {
                 required
               />
             </div>
-            
+
             {error && (
               <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg text-sm">
                 {error}
               </div>
             )}
-            
+
             <button
               type="submit"
               disabled={isSubmitting}
@@ -115,7 +121,7 @@ export default function LoginPage() {
             </button>
           </form>
         </div>
-        
+
         {/* Footer */}
         <p className="text-center text-gray-500 text-sm mt-6">
           © 2024 Shabba • OnSite Flow

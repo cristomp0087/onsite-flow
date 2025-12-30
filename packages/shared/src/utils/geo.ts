@@ -20,7 +20,10 @@ function toRadians(degrees: number): number {
  * Calcula a distância entre dois pontos usando a fórmula de Haversine
  * Retorna a distância em metros
  */
-export function calculateDistance(point1: Coordinates, point2: Coordinates): number {
+export function calculateDistance(
+  point1: Coordinates,
+  point2: Coordinates
+): number {
   const lat1 = toRadians(point1.latitude);
   const lat2 = toRadians(point2.latitude);
   const deltaLat = toRadians(point2.latitude - point1.latitude);
@@ -28,7 +31,10 @@ export function calculateDistance(point1: Coordinates, point2: Coordinates): num
 
   const a =
     Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
+    Math.cos(lat1) *
+      Math.cos(lat2) *
+      Math.sin(deltaLon / 2) *
+      Math.sin(deltaLon / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
@@ -50,7 +56,9 @@ export function isInsideGeofence(
 /**
  * Encontra o geofence mais próximo de um ponto
  */
-export function findNearestGeofence<T extends { center: Coordinates; radius: number }>(
+export function findNearestGeofence<
+  T extends { center: Coordinates; radius: number },
+>(
   point: Coordinates,
   geofences: T[]
 ): { geofence: T; distance: number } | null {
@@ -74,11 +82,12 @@ export function findNearestGeofence<T extends { center: Coordinates; radius: num
 /**
  * Encontra todos os geofences que contêm um ponto
  */
-export function findContainingGeofences<T extends { center: Coordinates; radius: number }>(
-  point: Coordinates,
-  geofences: T[]
-): T[] {
-  return geofences.filter(geofence => isInsideGeofence(point, geofence.center, geofence.radius));
+export function findContainingGeofences<
+  T extends { center: Coordinates; radius: number },
+>(point: Coordinates, geofences: T[]): T[] {
+  return geofences.filter((geofence) =>
+    isInsideGeofence(point, geofence.center, geofence.radius)
+  );
 }
 
 /**
@@ -92,7 +101,8 @@ export function calculateBearing(from: Coordinates, to: Coordinates): number {
 
   const y = Math.sin(deltaLon) * Math.cos(lat2);
   const x =
-    Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
 
   let bearing = Math.atan2(y, x) * (180 / Math.PI);
 
@@ -115,8 +125,13 @@ export function formatDistance(meters: number): string {
 /**
  * Valida se coordenadas são válidas
  */
-export function isValidCoordinates(coords: Partial<Coordinates>): coords is Coordinates {
-  if (typeof coords.latitude !== 'number' || typeof coords.longitude !== 'number') {
+export function isValidCoordinates(
+  coords: Partial<Coordinates>
+): coords is Coordinates {
+  if (
+    typeof coords.latitude !== 'number' ||
+    typeof coords.longitude !== 'number'
+  ) {
     return false;
   }
 

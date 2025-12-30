@@ -5,7 +5,7 @@ import { colors } from '../../src/constants/colors';
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  
+
   return (
     <View style={styles.container}>
       <Tabs
@@ -64,7 +64,9 @@ function TabIcon({ icon, color }: { icon: string; color: string }) {
   return (
     <View style={{ opacity: color === colors.primary ? 1 : 0.6 }}>
       <View style={{ fontSize: 24 }}>
-        <View><Text style={{ fontSize: 22 }}>{icon}</Text></View>
+        <View>
+          <Text style={{ fontSize: 22 }}>{icon}</Text>
+        </View>
       </View>
     </View>
   );

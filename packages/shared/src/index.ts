@@ -1,15 +1,13 @@
 /**
- * @onsite/shared
- *
- * Pacote compartilhado entre mobile e web
- * Contém types, constantes e utilitários comuns
+ * @onsite-flow/shared
+ * Código compartilhado entre mobile e web
  */
 
 // Types
 export * from './types';
 
-// Constantes
-export * from './constants';
-
-// Utilitários
+// Utils
 export * from './utils';
+
+// Constants
+export * from './constants';

@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase';
 import type { Local } from '@/types/database';
-import { 
-  MapPin, 
-  Plus, 
-  Trash2, 
-  Edit2, 
+import {
+  MapPin,
+  Plus,
+  Trash2,
+  Edit2,
   X,
   Save,
   Navigation,
@@ -42,8 +42,11 @@ export default function LocaisPage() {
   const [showModal, setShowModal] = useState(false);
   const [editando, setEditando] = useState<Local | null>(null);
   const [mapCenter, setMapCenter] = useState({ lat: -23.5505, lng: -46.6333 }); // São Paulo default
-  const [selectedPosition, setSelectedPosition] = useState<{ lat: number; lng: number } | null>(null);
-  
+  const [selectedPosition, setSelectedPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
   const [formData, setFormData] = useState<NovoLocal>({
     nome: '',
     latitude: 0,
@@ -51,18 +54,18 @@ export default function LocaisPage() {
     raio: 100,
     cor: CORES_DISPONIVEIS[0].valor,
   });
-  
+
   // Buscar locais
   const fetchLocais = useCallback(async () => {
     if (!user) return;
-    
+
     setIsLoading(true);
     const { data, error } = await supabase
       .from('locais')
       .select('*')
       .eq('user_id', user.id)
       .order('nome');
-    
+
     if (error) {
       console.error('Erro ao buscar locais:', error);
     } else {
@@ -74,11 +77,11 @@ export default function LocaisPage() {
     }
     setIsLoading(false);
   }, [user]);
-  
+
   useEffect(() => {
     fetchLocais();
   }, [fetchLocais]);
-  
+
   // Abrir modal para novo local
   const handleNovoLocal = () => {
     setEditando(null);
@@ -92,7 +95,7 @@ export default function LocaisPage() {
     setSelectedPosition(null);
     setShowModal(true);
   };
-  
+
   // Abrir modal para editar
   const handleEditar = (local: Local) => {
     setEditando(local);
@@ -106,11 +109,11 @@ export default function LocaisPage() {
     setSelectedPosition({ lat: local.latitude, lng: local.longitude });
     setShowModal(true);
   };
-  
+
   // Salvar local
   const handleSalvar = async () => {
     if (!user || !formData.nome.trim()) return;
-    
+
     const dados = {
       user_id: user.id,
       nome: formData.nome.trim(),
@@ -120,14 +123,14 @@ export default function LocaisPage() {
       cor: formData.cor,
       ativo: true,
     };
-    
+
     if (editando) {
       // Atualizar
       const { error } = await supabase
         .from('locais')
         .update(dados)
         .eq('id', editando.id);
-      
+
       if (error) {
         console.error('Erro ao atualizar:', error);
         alert('Erro ao atualizar local');
@@ -135,60 +138,55 @@ export default function LocaisPage() {
       }
     } else {
       // Criar
-      const { error } = await supabase
-        .from('locais')
-        .insert(dados);
-      
+      const { error } = await supabase.from('locais').insert(dados);
+
       if (error) {
         console.error('Erro ao criar:', error);
         alert('Erro ao criar local');
         return;
       }
     }
-    
+
     setShowModal(false);
     fetchLocais();
   };
-  
+
   // Excluir local
   const handleExcluir = async (local: Local) => {
     if (!confirm(`Deseja excluir "${local.nome}"?`)) return;
-    
-    const { error } = await supabase
-      .from('locais')
-      .delete()
-      .eq('id', local.id);
-    
+
+    const { error } = await supabase.from('locais').delete().eq('id', local.id);
+
     if (error) {
       console.error('Erro ao excluir:', error);
       alert('Erro ao excluir local');
       return;
     }
-    
+
     fetchLocais();
   };
-  
+
   // Toggle ativo/inativo
   const handleToggleAtivo = async (local: Local) => {
     const { error } = await supabase
       .from('locais')
       .update({ ativo: !local.ativo })
       .eq('id', local.id);
-    
+
     if (error) {
       console.error('Erro ao atualizar:', error);
       return;
     }
-    
+
     fetchLocais();
   };
-  
+
   // Simular clique no mapa (placeholder - integrar com Google Maps ou Leaflet)
   const handleMapClick = (lat: number, lng: number) => {
     setSelectedPosition({ lat, lng });
-    setFormData(prev => ({ ...prev, latitude: lat, longitude: lng }));
+    setFormData((prev) => ({ ...prev, latitude: lat, longitude: lng }));
   };
-  
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -207,7 +205,7 @@ export default function LocaisPage() {
           Novo Local
         </button>
       </div>
-      
+
       {/* Layout com Mapa e Lista */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Mapa */}
@@ -225,7 +223,7 @@ export default function LocaisPage() {
                 Integrar com Google Maps ou Leaflet
               </p>
             </div>
-            
+
             {/* Marcadores dos locais existentes */}
             {locais.map((local, index) => (
               <div
@@ -234,23 +232,25 @@ export default function LocaisPage() {
                 style={{
                   backgroundColor: local.cor || '#3B82F6',
                   // Posição simulada para demo
-                  top: `${20 + (index * 15)}%`,
-                  left: `${20 + (index * 20)}%`,
+                  top: `${20 + index * 15}%`,
+                  left: `${20 + index * 20}%`,
                 }}
                 title={local.nome}
               />
             ))}
           </div>
-          
+
           {/* Coordenadas atuais */}
           <div className="p-4 bg-gray-50 text-sm text-gray-600">
             <div className="flex items-center gap-2">
               <Navigation className="w-4 h-4" />
-              <span>Centro: {mapCenter.lat.toFixed(6)}, {mapCenter.lng.toFixed(6)}</span>
+              <span>
+                Centro: {mapCenter.lat.toFixed(6)}, {mapCenter.lng.toFixed(6)}
+              </span>
             </div>
           </div>
         </div>
-        
+
         {/* Lista de Locais */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-4 border-b border-gray-100">
@@ -258,7 +258,7 @@ export default function LocaisPage() {
               Seus Locais ({locais.length})
             </h3>
           </div>
-          
+
           <div className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
             {isLoading ? (
               <div className="p-8 text-center">
@@ -287,18 +287,21 @@ export default function LocaisPage() {
                       className="w-4 h-4 rounded-full mt-1 flex-shrink-0"
                       style={{ backgroundColor: local.cor || '#3B82F6' }}
                     />
-                    
+
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-gray-900">{local.nome}</h4>
+                      <h4 className="font-medium text-gray-900">
+                        {local.nome}
+                      </h4>
                       <p className="text-sm text-gray-500 mt-1">
-                        {local.latitude.toFixed(6)}, {local.longitude.toFixed(6)}
+                        {local.latitude.toFixed(6)},{' '}
+                        {local.longitude.toFixed(6)}
                       </p>
                       <p className="text-sm text-gray-500">
                         Raio: {local.raio}m
                       </p>
                     </div>
-                    
+
                     {/* Ações */}
                     <div className="flex items-center gap-2">
                       <button
@@ -331,7 +334,7 @@ export default function LocaisPage() {
           </div>
         </div>
       </div>
-      
+
       {/* Modal Novo/Editar Local */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -348,7 +351,7 @@ export default function LocaisPage() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {/* Form */}
             <div className="p-6 space-y-4">
               {/* Nome */}
@@ -359,12 +362,14 @@ export default function LocaisPage() {
                 <input
                   type="text"
                   value={formData.nome}
-                  onChange={(e) => setFormData(prev => ({ ...prev, nome: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, nome: e.target.value }))
+                  }
                   placeholder="Ex: Escritório, Obra Centro..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                 />
               </div>
-              
+
               {/* Coordenadas */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -377,8 +382,12 @@ export default function LocaisPage() {
                     value={selectedPosition?.lat || formData.latitude}
                     onChange={(e) => {
                       const lat = parseFloat(e.target.value);
-                      setFormData(prev => ({ ...prev, latitude: lat }));
-                      setSelectedPosition(prev => prev ? { ...prev, lat } : { lat, lng: formData.longitude });
+                      setFormData((prev) => ({ ...prev, latitude: lat }));
+                      setSelectedPosition((prev) =>
+                        prev
+                          ? { ...prev, lat }
+                          : { lat, lng: formData.longitude }
+                      );
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                   />
@@ -393,14 +402,18 @@ export default function LocaisPage() {
                     value={selectedPosition?.lng || formData.longitude}
                     onChange={(e) => {
                       const lng = parseFloat(e.target.value);
-                      setFormData(prev => ({ ...prev, longitude: lng }));
-                      setSelectedPosition(prev => prev ? { ...prev, lng } : { lat: formData.latitude, lng });
+                      setFormData((prev) => ({ ...prev, longitude: lng }));
+                      setSelectedPosition((prev) =>
+                        prev
+                          ? { ...prev, lng }
+                          : { lat: formData.latitude, lng }
+                      );
                     }}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                   />
                 </div>
               </div>
-              
+
               {/* Raio */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -409,14 +422,21 @@ export default function LocaisPage() {
                 <input
                   type="number"
                   value={formData.raio}
-                  onChange={(e) => setFormData(prev => ({ ...prev, raio: parseInt(e.target.value) || 100 }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      raio: parseInt(e.target.value) || 100,
+                    }))
+                  }
                   min={50}
                   max={1000}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
                 />
-                <p className="text-xs text-gray-500 mt-1">Mínimo: 50m, Máximo: 1000m</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Mínimo: 50m, Máximo: 1000m
+                </p>
               </div>
-              
+
               {/* Cor */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -426,7 +446,9 @@ export default function LocaisPage() {
                   {CORES_DISPONIVEIS.map((cor) => (
                     <button
                       key={cor.valor}
-                      onClick={() => setFormData(prev => ({ ...prev, cor: cor.valor }))}
+                      onClick={() =>
+                        setFormData((prev) => ({ ...prev, cor: cor.valor }))
+                      }
                       className={`w-8 h-8 rounded-full border-2 transition ${
                         formData.cor === cor.valor
                           ? 'border-gray-900 scale-110'
@@ -438,13 +460,14 @@ export default function LocaisPage() {
                   ))}
                 </div>
               </div>
-              
+
               {/* Dica */}
               <div className="bg-blue-50 text-blue-700 px-4 py-3 rounded-lg text-sm">
-                💡 No futuro, você poderá clicar no mapa para selecionar a localização automaticamente.
+                💡 No futuro, você poderá clicar no mapa para selecionar a
+                localização automaticamente.
               </div>
             </div>
-            
+
             {/* Footer */}
             <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100">
               <button

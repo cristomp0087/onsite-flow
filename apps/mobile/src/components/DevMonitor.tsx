@@ -40,22 +40,22 @@ export function DevMonitor() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef<ScrollView>(null);
-  
+
   // Só mostra em desenvolvimento
   if (!__DEV__) return null;
-  
+
   useEffect(() => {
     const unsubscribe = addLogListener((entry) => {
-      setLogs(prev => [...prev.slice(-99), entry]);
+      setLogs((prev) => [...prev.slice(-99), entry]);
       // Auto scroll
       setTimeout(() => {
         scrollRef.current?.scrollToEnd({ animated: true });
       }, 100);
     });
-    
+
     return unsubscribe;
   }, []);
-  
+
   useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: isOpen ? 1 : 0,
@@ -63,23 +63,23 @@ export function DevMonitor() {
       useNativeDriver: true,
     }).start();
   }, [isOpen]);
-  
+
   const panelHeight = Dimensions.get('window').height * 0.5;
-  
+
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [panelHeight, 0],
   });
-  
+
   const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { 
+    return date.toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
     });
   };
-  
+
   return (
     <>
       {/* Botão flutuante */}
@@ -90,12 +90,12 @@ export function DevMonitor() {
       >
         <Text style={styles.fabText}>{isOpen ? '✕' : '🔍'}</Text>
       </TouchableOpacity>
-      
+
       {/* Painel de logs */}
-      <Animated.View 
+      <Animated.View
         style={[
           styles.panel,
-          { height: panelHeight, transform: [{ translateY }] }
+          { height: panelHeight, transform: [{ translateY }] },
         ]}
         pointerEvents={isOpen ? 'auto' : 'none'}
       >
@@ -105,8 +105,8 @@ export function DevMonitor() {
             <Text style={styles.clearBtn}>Limpar</Text>
           </TouchableOpacity>
         </View>
-        
-        <ScrollView 
+
+        <ScrollView
           ref={scrollRef}
           style={styles.logList}
           showsVerticalScrollIndicator={true}
@@ -117,7 +117,9 @@ export function DevMonitor() {
             logs.map((log, index) => (
               <View key={index} style={styles.logEntry}>
                 <Text style={styles.logTime}>{formatTime(log.timestamp)}</Text>
-                <Text style={[styles.logLevel, { color: levelColors[log.level] }]}>
+                <Text
+                  style={[styles.logLevel, { color: levelColors[log.level] }]}
+                >
                   {levelEmoji[log.level]} {log.category.toUpperCase()}
                 </Text>
                 <Text style={styles.logMessage}>{log.message}</Text>

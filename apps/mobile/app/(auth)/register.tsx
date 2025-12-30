@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
@@ -21,22 +21,22 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuthStore();
-  
+
   const handleRegister = async () => {
     if (!nome || !email || !password) {
       Alert.alert('Erro', 'Preencha todos os campos');
       return;
     }
-    
+
     if (password.length < 6) {
       Alert.alert('Erro', 'A senha deve ter pelo menos 6 caracteres');
       return;
     }
-    
+
     setLoading(true);
     const { error } = await signUp(email, password, nome);
     setLoading(false);
-    
+
     if (error) {
       Alert.alert('Erro', error);
     } else {
@@ -44,10 +44,10 @@ export default function RegisterScreen() {
       router.replace('/(auth)/login');
     }
   };
-  
+
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
@@ -56,7 +56,7 @@ export default function RegisterScreen() {
           <Text style={styles.title}>Criar Conta</Text>
           <Text style={styles.subtitle}>Comece a rastrear suas horas</Text>
         </View>
-        
+
         <View style={styles.form}>
           <Input
             label="Nome"
@@ -64,7 +64,7 @@ export default function RegisterScreen() {
             value={nome}
             onChangeText={setNome}
           />
-          
+
           <Input
             label="Email"
             placeholder="seu@email.com"
@@ -73,7 +73,7 @@ export default function RegisterScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          
+
           <Input
             label="Senha"
             placeholder="••••••••"
@@ -81,7 +81,7 @@ export default function RegisterScreen() {
             onChangeText={setPassword}
             secureTextEntry
           />
-          
+
           <Button
             title="Criar Conta"
             onPress={handleRegister}
@@ -89,7 +89,7 @@ export default function RegisterScreen() {
             style={{ marginTop: 8 }}
           />
         </View>
-        
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Já tem conta? </Text>
           <TouchableOpacity onPress={() => router.back()}>

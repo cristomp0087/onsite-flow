@@ -13,14 +13,31 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Circle, PROVIDER_GOOGLE, MapPressEvent } from 'react-native-maps';
-import { useLocationStore, type LocalDeTrabalho } from '../../src/stores/locationStore';
-import { searchAddress, reverseGeocode, type GeocodingResult } from '../../src/lib/geocoding';
+import MapView, {
+  Marker,
+  Circle,
+  PROVIDER_GOOGLE,
+  MapPressEvent,
+} from 'react-native-maps';
+import {
+  useLocationStore,
+  type LocalDeTrabalho,
+} from '../../src/stores/locationStore';
+import {
+  searchAddress,
+  reverseGeocode,
+  type GeocodingResult,
+} from '../../src/lib/geocoding';
 import { colors } from '../../src/constants/colors';
 import { logger } from '../../src/lib/logger';
 import { Button } from '../../src/components/ui/Button';
 
-type AddLocationStep = 'closed' | 'choose-method' | 'search' | 'pick-on-map' | 'confirm';
+type AddLocationStep =
+  | 'closed'
+  | 'choose-method'
+  | 'search'
+  | 'pick-on-map'
+  | 'confirm';
 
 export default function MapScreen() {
   const {
@@ -40,7 +57,7 @@ export default function MapScreen() {
   } = useLocationStore();
 
   const mapRef = useRef<MapView>(null);
-  
+
   // Estado do fluxo de adicionar local
   const [addStep, setAddStep] = useState<AddLocationStep>('closed');
   const [newLocalName, setNewLocalName] = useState('');
@@ -50,12 +67,12 @@ export default function MapScreen() {
     longitude: number;
     address?: string;
   } | null>(null);
-  
+
   // Busca de endereço
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  
+
   // Modo de seleção no mapa
   const [isPickingOnMap, setIsPickingOnMap] = useState(false);
 
@@ -66,7 +83,7 @@ export default function MapScreen() {
   // Buscar endereço
   const handleSearch = async () => {
     if (searchQuery.length < 3) return;
-    
+
     setIsSearching(true);
     try {
       const results = await searchAddress(searchQuery);
@@ -88,34 +105,40 @@ export default function MapScreen() {
     setSearchResults([]);
     setSearchQuery('');
     setAddStep('confirm');
-    
+
     // Mover mapa para o local
-    mapRef.current?.animateToRegion({
-      latitude: result.latitude,
-      longitude: result.longitude,
-      latitudeDelta: 0.005,
-      longitudeDelta: 0.005,
-    }, 500);
+    mapRef.current?.animateToRegion(
+      {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      },
+      500
+    );
   };
 
   // Selecionar ponto no mapa (apenas quando em modo de seleção)
   const handleMapPress = async (event: MapPressEvent) => {
     // Só processar se está no modo de seleção no mapa
     if (!isPickingOnMap) return;
-    
+
     const { latitude, longitude } = event.nativeEvent.coordinate;
-    
-    logger.info('map', 'Map pressed - selecting location', { latitude, longitude });
-    
+
+    logger.info('map', 'Map pressed - selecting location', {
+      latitude,
+      longitude,
+    });
+
     // Buscar endereço do ponto
     const address = await reverseGeocode(latitude, longitude);
-    
+
     setSelectedLocation({
       latitude,
       longitude,
       address: address || undefined,
     });
-    
+
     // Sair do modo de seleção e ir para confirmação
     setIsPickingOnMap(false);
     setAddStep('confirm');
@@ -172,14 +195,14 @@ export default function MapScreen() {
       Alert.alert('Erro', 'Digite um nome para o local');
       return;
     }
-    
+
     if (!selectedLocation) {
       Alert.alert('Erro', 'Selecione uma localização');
       return;
     }
-    
+
     const raio = parseInt(newLocalRaio) || 50;
-    
+
     addLocal({
       nome: newLocalName.trim(),
       latitude: selectedLocation.latitude,
@@ -188,33 +211,36 @@ export default function MapScreen() {
       cor: getRandomColor(),
       ativo: true,
     });
-    
+
     closeAddModal();
     Alert.alert('Sucesso', 'Local adicionado!');
   };
 
   // Deletar local
   const handleDeleteLocal = (local: LocalDeTrabalho) => {
-    Alert.alert(
-      'Remover Local',
-      `Deseja remover "${local.nome}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Remover', 
-          style: 'destructive',
-          onPress: () => removeLocal(local.id),
-        },
-      ]
-    );
+    Alert.alert('Remover Local', `Deseja remover "${local.nome}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: () => removeLocal(local.id),
+      },
+    ]);
   };
 
   const getRandomColor = () => {
-    const colorsArr = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+    const colorsArr = [
+      '#3B82F6',
+      '#10B981',
+      '#F59E0B',
+      '#EF4444',
+      '#8B5CF6',
+      '#EC4899',
+    ];
     return colorsArr[Math.floor(Math.random() * colorsArr.length)];
   };
 
-  const activeLocal = locais.find(l => l.id === activeGeofence);
+  const activeLocal = locais.find((l) => l.id === activeGeofence);
 
   // Verificar se modal deve estar visível
   const isModalVisible = addStep !== 'closed' && addStep !== 'pick-on-map';
@@ -246,21 +272,27 @@ export default function MapScreen() {
             {locais.map((local) => (
               <React.Fragment key={local.id}>
                 <Circle
-                  center={{ latitude: local.latitude, longitude: local.longitude }}
+                  center={{
+                    latitude: local.latitude,
+                    longitude: local.longitude,
+                  }}
                   radius={local.raio}
                   fillColor={`${local.cor}30`}
                   strokeColor={local.cor}
                   strokeWidth={2}
                 />
                 <Marker
-                  coordinate={{ latitude: local.latitude, longitude: local.longitude }}
+                  coordinate={{
+                    latitude: local.latitude,
+                    longitude: local.longitude,
+                  }}
                   title={local.nome}
                   description={`Raio: ${local.raio}m`}
                   pinColor={local.cor}
                 />
               </React.Fragment>
             ))}
-            
+
             {/* Marcador de seleção */}
             {selectedLocation && (
               <Marker
@@ -270,7 +302,9 @@ export default function MapScreen() {
                 draggable={isPickingOnMap}
                 onDragEnd={(e) => {
                   const { latitude, longitude } = e.nativeEvent.coordinate;
-                  setSelectedLocation(prev => prev ? { ...prev, latitude, longitude } : null);
+                  setSelectedLocation((prev) =>
+                    prev ? { ...prev, latitude, longitude } : null
+                  );
                 }}
               />
             )}
@@ -281,26 +315,33 @@ export default function MapScreen() {
             <Text style={styles.loadingText}>Carregando mapa...</Text>
           </View>
         )}
-        
+
         {/* Status overlay */}
         {activeLocal && !isPickingOnMap && (
           <View style={styles.statusOverlay}>
-            <Text style={styles.statusText}>🎯 Você está em: {activeLocal.nome}</Text>
+            <Text style={styles.statusText}>
+              🎯 Você está em: {activeLocal.nome}
+            </Text>
           </View>
         )}
-        
+
         {/* Overlay quando está selecionando no mapa */}
         {isPickingOnMap && (
           <>
             <View style={styles.pickingOverlay}>
-              <Text style={styles.pickingText}>👆 Toque no mapa para selecionar o local</Text>
+              <Text style={styles.pickingText}>
+                👆 Toque no mapa para selecionar o local
+              </Text>
             </View>
-            <TouchableOpacity style={styles.cancelPickButton} onPress={cancelPickOnMap}>
+            <TouchableOpacity
+              style={styles.cancelPickButton}
+              onPress={cancelPickOnMap}
+            >
               <Text style={styles.cancelPickText}>✕ Cancelar</Text>
             </TouchableOpacity>
             {selectedLocation && (
-              <TouchableOpacity 
-                style={styles.confirmPickButton} 
+              <TouchableOpacity
+                style={styles.confirmPickButton}
                 onPress={() => {
                   setIsPickingOnMap(false);
                   setAddStep('confirm');
@@ -312,7 +353,7 @@ export default function MapScreen() {
           </>
         )}
       </View>
-      
+
       {/* Painel inferior (escondido quando selecionando no mapa) */}
       {!isPickingOnMap && (
         <View style={styles.panel}>
@@ -320,21 +361,27 @@ export default function MapScreen() {
             {/* Locais */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>📍 Locais ({locais.length})</Text>
+                <Text style={styles.sectionTitle}>
+                  📍 Locais ({locais.length})
+                </Text>
                 <TouchableOpacity onPress={openAddModal}>
                   <Text style={styles.addButton}>+ Adicionar</Text>
                 </TouchableOpacity>
               </View>
-              
+
               {locais.length === 0 ? (
                 <Text style={styles.emptyText}>Nenhum local cadastrado</Text>
               ) : (
                 locais.map((local) => (
                   <View key={local.id} style={styles.localItem}>
-                    <View style={[styles.localDot, { backgroundColor: local.cor }]} />
+                    <View
+                      style={[styles.localDot, { backgroundColor: local.cor }]}
+                    />
                     <View style={styles.localInfo}>
                       <Text style={styles.localName}>{local.nome}</Text>
-                      <Text style={styles.localDetails}>Raio: {local.raio}m</Text>
+                      <Text style={styles.localDetails}>
+                        Raio: {local.raio}m
+                      </Text>
                     </View>
                     <TouchableOpacity onPress={() => handleDeleteLocal(local)}>
                       <Text style={styles.deleteButton}>🗑️</Text>
@@ -343,17 +390,23 @@ export default function MapScreen() {
                 ))
               )}
             </View>
-            
+
             {/* Monitoramento */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>🔔 Monitoramento</Text>
               <Text style={styles.statusLabel}>
                 Status: {isGeofencingActive ? '🟢 Ativo' : '⚫ Inativo'}
               </Text>
-              
+
               <Button
-                title={isGeofencingActive ? '⏹️ Parar' : '▶️ Iniciar Monitoramento'}
-                onPress={isGeofencingActive ? stopGeofenceMonitoring : startGeofenceMonitoring}
+                title={
+                  isGeofencingActive ? '⏹️ Parar' : '▶️ Iniciar Monitoramento'
+                }
+                onPress={
+                  isGeofencingActive
+                    ? stopGeofenceMonitoring
+                    : startGeofenceMonitoring
+                }
                 variant={isGeofencingActive ? 'secondary' : 'primary'}
                 disabled={locais.length === 0}
               />
@@ -361,41 +414,60 @@ export default function MapScreen() {
           </ScrollView>
         </View>
       )}
-      
+
       {/* Modal - Escolher Método */}
-      <Modal visible={addStep === 'choose-method'} animationType="slide" transparent>
-        <KeyboardAvoidingView 
+      <Modal
+        visible={addStep === 'choose-method'}
+        animationType="slide"
+        transparent
+      >
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>📍 Adicionar Local</Text>
-            <Text style={styles.modalSubtitle}>Como você quer definir o local?</Text>
-            
-            <TouchableOpacity style={styles.methodButton} onPress={useCurrentLocation}>
+            <Text style={styles.modalSubtitle}>
+              Como você quer definir o local?
+            </Text>
+
+            <TouchableOpacity
+              style={styles.methodButton}
+              onPress={useCurrentLocation}
+            >
               <Text style={styles.methodIcon}>📍</Text>
               <View style={styles.methodInfo}>
                 <Text style={styles.methodTitle}>Usar localização atual</Text>
                 <Text style={styles.methodDesc}>Usar onde você está agora</Text>
               </View>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.methodButton} onPress={() => setAddStep('search')}>
+
+            <TouchableOpacity
+              style={styles.methodButton}
+              onPress={() => setAddStep('search')}
+            >
               <Text style={styles.methodIcon}>🔍</Text>
               <View style={styles.methodInfo}>
                 <Text style={styles.methodTitle}>Buscar por endereço</Text>
-                <Text style={styles.methodDesc}>Digite um endereço para buscar</Text>
+                <Text style={styles.methodDesc}>
+                  Digite um endereço para buscar
+                </Text>
               </View>
             </TouchableOpacity>
-            
-            <TouchableOpacity style={styles.methodButton} onPress={startPickOnMap}>
+
+            <TouchableOpacity
+              style={styles.methodButton}
+              onPress={startPickOnMap}
+            >
               <Text style={styles.methodIcon}>🗺️</Text>
               <View style={styles.methodInfo}>
                 <Text style={styles.methodTitle}>Selecionar no mapa</Text>
-                <Text style={styles.methodDesc}>Toque no mapa para escolher</Text>
+                <Text style={styles.methodDesc}>
+                  Toque no mapa para escolher
+                </Text>
               </View>
             </TouchableOpacity>
-            
+
             <Button
               title="Cancelar"
               onPress={closeAddModal}
@@ -405,16 +477,16 @@ export default function MapScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      
+
       {/* Modal - Buscar Endereço */}
       <Modal visible={addStep === 'search'} animationType="slide" transparent>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>🔍 Buscar Endereço</Text>
-            
+
             <View style={styles.searchContainer}>
               <TextInput
                 style={styles.searchInput}
@@ -424,13 +496,18 @@ export default function MapScreen() {
                 onSubmitEditing={handleSearch}
                 autoFocus
               />
-              <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
+              <TouchableOpacity
+                style={styles.searchButton}
+                onPress={handleSearch}
+              >
                 <Text style={styles.searchButtonText}>🔍</Text>
               </TouchableOpacity>
             </View>
-            
-            {isSearching && <ActivityIndicator style={{ marginVertical: 20 }} />}
-            
+
+            {isSearching && (
+              <ActivityIndicator style={{ marginVertical: 20 }} />
+            )}
+
             {searchResults.length > 0 && (
               <ScrollView style={styles.searchResults}>
                 {searchResults.map((result, index) => (
@@ -446,13 +523,15 @@ export default function MapScreen() {
                 ))}
               </ScrollView>
             )}
-            
-            {searchQuery.length > 0 && searchResults.length === 0 && !isSearching && (
-              <Text style={styles.noResultsText}>
-                Nenhum resultado. Tente outro termo.
-              </Text>
-            )}
-            
+
+            {searchQuery.length > 0 &&
+              searchResults.length === 0 &&
+              !isSearching && (
+                <Text style={styles.noResultsText}>
+                  Nenhum resultado. Tente outro termo.
+                </Text>
+              )}
+
             <Button
               title="← Voltar"
               onPress={() => setAddStep('choose-method')}
@@ -462,26 +541,28 @@ export default function MapScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-      
+
       {/* Modal - Confirmar e Salvar */}
       <Modal visible={addStep === 'confirm'} animationType="slide" transparent>
-        <KeyboardAvoidingView 
+        <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>✅ Confirmar Local</Text>
-            
+
             {selectedLocation && (
               <View style={styles.selectedLocation}>
-                <Text style={styles.selectedLocationLabel}>Local selecionado:</Text>
+                <Text style={styles.selectedLocationLabel}>
+                  Local selecionado:
+                </Text>
                 <Text style={styles.selectedLocationText}>
-                  {selectedLocation.address || 
-                   `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`}
+                  {selectedLocation.address ||
+                    `${selectedLocation.latitude.toFixed(6)}, ${selectedLocation.longitude.toFixed(6)}`}
                 </Text>
               </View>
             )}
-            
+
             <TextInput
               style={styles.input}
               placeholder="Nome do local (ex: Escritório, Obra Centro)"
@@ -489,7 +570,7 @@ export default function MapScreen() {
               onChangeText={setNewLocalName}
               autoFocus
             />
-            
+
             <View style={styles.raioContainer}>
               <Text style={styles.raioLabel}>Raio de detecção (metros):</Text>
               <TextInput
@@ -499,11 +580,11 @@ export default function MapScreen() {
                 onChangeText={setNewLocalRaio}
               />
             </View>
-            
+
             <Text style={styles.raioHint}>
               💡 Use 30-50m para locais pequenos, 100-200m para áreas maiores
             </Text>
-            
+
             <View style={styles.modalButtons}>
               <Button
                 title="← Voltar"

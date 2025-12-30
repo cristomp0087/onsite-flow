@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { 
-  User, 
-  CreditCard, 
-  Bell, 
-  MapPin, 
-  Shield, 
+import {
+  User,
+  CreditCard,
+  Bell,
+  MapPin,
+  Shield,
   ExternalLink,
   LogOut,
   Trash2,
@@ -26,15 +26,15 @@ import {
 const URLS_EXTERNAS = {
   // Site/Portal do usuário
   portal: 'https://onsite.app/portal',
-  
+
   // Shopify/E-commerce
   shopify: 'https://onsite.app/shopify/account',
   assinatura: 'https://onsite.app/billing',
-  
+
   // Suporte
   suporte: 'https://onsite.app/support',
   docs: 'https://onsite.app/docs',
-  
+
   // Legal
   termos: 'https://onsite.app/terms',
   privacidade: 'https://onsite.app/privacy',
@@ -64,27 +64,37 @@ export default function ConfiguracoesPage() {
   const [notificacoesEmail, setNotificacoesEmail] = useState(true);
   const [notificacoesPush, setNotificacoesPush] = useState(true);
   const [relatorioSemanal, setRelatorioSemanal] = useState(false);
-  
+
   // Handlers
   const handleExcluirConta = () => {
-    if (confirm('Tem certeza que deseja excluir sua conta?\n\nEsta ação é irreversível e todos os seus dados serão perdidos.')) {
-      if (confirm('ATENÇÃO: Você perderá acesso a todos os seus registros de horas.\n\nDigite "EXCLUIR" para confirmar.')) {
+    if (
+      confirm(
+        'Tem certeza que deseja excluir sua conta?\n\nEsta ação é irreversível e todos os seus dados serão perdidos.'
+      )
+    ) {
+      if (
+        confirm(
+          'ATENÇÃO: Você perderá acesso a todos os seus registros de horas.\n\nDigite "EXCLUIR" para confirmar.'
+        )
+      ) {
         // TODO: Implementar exclusão de conta
-        alert('Para excluir sua conta, entre em contato com o suporte:\nsuporte@onsite.app');
+        alert(
+          'Para excluir sua conta, entre em contato com o suporte:\nsuporte@onsite.app'
+        );
       }
     }
   };
-  
+
   const handleSignOut = () => {
     if (confirm('Deseja sair da sua conta?')) {
       signOut();
     }
   };
-  
+
   const abrirLink = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
-  
+
   // Configurações organizadas por seção
   const secoes: ConfigSection[] = [
     {
@@ -323,17 +333,15 @@ export default function ConfiguracoesPage() {
       ],
     },
   ];
-  
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Configurações</h1>
-        <p className="text-gray-500 mt-1">
-          Gerencie sua conta e preferências
-        </p>
+        <p className="text-gray-500 mt-1">Gerencie sua conta e preferências</p>
       </div>
-      
+
       {/* Aviso sobre links externos */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex items-start gap-3">
@@ -343,13 +351,13 @@ export default function ConfiguracoesPage() {
               Algumas configurações abrem em uma nova aba
             </p>
             <p className="text-sm text-blue-600 mt-1">
-              Para segurança, dados sensíveis como pagamento e senha são gerenciados 
-              em nosso portal seguro.
+              Para segurança, dados sensíveis como pagamento e senha são
+              gerenciados em nosso portal seguro.
             </p>
           </div>
         </div>
       </div>
-      
+
       {/* Seções de Configuração */}
       <div className="space-y-6">
         {secoes.map((secao) => (
@@ -360,25 +368,31 @@ export default function ConfiguracoesPage() {
             {/* Header da Seção */}
             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
               <div className="flex items-center gap-3">
-                <div className={`${secao.id === 'perigo' ? 'text-red-500' : 'text-gray-600'}`}>
+                <div
+                  className={`${secao.id === 'perigo' ? 'text-red-500' : 'text-gray-600'}`}
+                >
                   {secao.icon}
                 </div>
                 <div>
-                  <h2 className={`font-semibold ${secao.id === 'perigo' ? 'text-red-700' : 'text-gray-900'}`}>
+                  <h2
+                    className={`font-semibold ${secao.id === 'perigo' ? 'text-red-700' : 'text-gray-900'}`}
+                  >
                     {secao.titulo}
                   </h2>
                   <p className="text-sm text-gray-500">{secao.descricao}</p>
                 </div>
               </div>
             </div>
-            
+
             {/* Items */}
             <div className="divide-y divide-gray-100">
               {secao.items.map((item) => (
                 <div
                   key={item.id}
                   className={`px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition ${
-                    item.tipo === 'link' || item.tipo === 'action' ? 'cursor-pointer' : ''
+                    item.tipo === 'link' || item.tipo === 'action'
+                      ? 'cursor-pointer'
+                      : ''
                   }`}
                   onClick={() => {
                     if (item.tipo === 'link' && item.url && item.url !== '#') {
@@ -389,12 +403,14 @@ export default function ConfiguracoesPage() {
                   }}
                 >
                   <div className="flex-1">
-                    <h3 className={`font-medium ${item.danger ? 'text-red-600' : 'text-gray-900'}`}>
+                    <h3
+                      className={`font-medium ${item.danger ? 'text-red-600' : 'text-gray-900'}`}
+                    >
                       {item.titulo}
                     </h3>
                     <p className="text-sm text-gray-500">{item.descricao}</p>
                   </div>
-                  
+
                   {/* Controle baseado no tipo */}
                   {item.tipo === 'link' && (
                     <div className="flex items-center gap-2 text-gray-400">
@@ -402,7 +418,7 @@ export default function ConfiguracoesPage() {
                       <ChevronRight className="w-4 h-4" />
                     </div>
                   )}
-                  
+
                   {item.tipo === 'toggle' && (
                     <button
                       onClick={(e) => {
@@ -420,13 +436,17 @@ export default function ConfiguracoesPage() {
                       />
                     </button>
                   )}
-                  
+
                   {item.tipo === 'action' && (
-                    <ChevronRight className={`w-4 h-4 ${item.danger ? 'text-red-400' : 'text-gray-400'}`} />
+                    <ChevronRight
+                      className={`w-4 h-4 ${item.danger ? 'text-red-400' : 'text-gray-400'}`}
+                    />
                   )}
-                  
+
                   {item.tipo === 'info' && (
-                    <span className="text-sm text-gray-500">{item.descricao}</span>
+                    <span className="text-sm text-gray-500">
+                      {item.descricao}
+                    </span>
                   )}
                 </div>
               ))}
@@ -434,7 +454,7 @@ export default function ConfiguracoesPage() {
           </div>
         ))}
       </div>
-      
+
       {/* Versão do App */}
       <div className="text-center py-8 text-gray-400 text-sm">
         <p>OnSite Flow Desktop v1.0.0</p>

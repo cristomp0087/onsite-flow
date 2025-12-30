@@ -19,7 +19,7 @@ export interface SessaoDB {
   device_id: string | null;
   created_at: string;
   synced_at: string | null;
-  
+
   // Campos auxiliares para a UI
   status?: 'ativa' | 'pausada' | 'finalizada';
   duracao_minutos?: number;
@@ -72,10 +72,12 @@ export async function initDatabase(): Promise<void> {
         synced_at TEXT
       )
     `);
-    
+
     logger.info('database', 'Database initialized');
   } catch (error) {
-    logger.error('database', 'Failed to init database', { error: String(error) });
+    logger.error('database', 'Failed to init database', {
+      error: String(error),
+    });
   }
 }
 
@@ -96,24 +98,24 @@ export async function saveLocal(dados: {
   const agora = new Date().toISOString();
   const id = dados.id || generateUUID();
   // Fallback seguro para user_id se vier vazio
-  const userId = dados.user_id || 'user_mobile_local'; 
-  const ativoInt = (dados.ativo === true || dados.ativo === 1) ? 1 : 0;
+  const userId = dados.user_id || 'user_mobile_local';
+  const ativoInt = dados.ativo === true || dados.ativo === 1 ? 1 : 0;
 
   try {
     db.runSync(
       `INSERT OR REPLACE INTO locais (id, user_id, nome, latitude, longitude, raio, cor, ativo, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        id, 
-        userId, 
-        dados.nome, 
-        dados.latitude, 
-        dados.longitude, 
-        dados.raio || 100, 
-        dados.cor || '#3B82F6', 
-        ativoInt, 
-        agora, 
-        agora
+        id,
+        userId,
+        dados.nome,
+        dados.latitude,
+        dados.longitude,
+        dados.raio || 100,
+        dados.cor || '#3B82F6',
+        ativoInt,
+        agora,
+        agora,
       ]
     );
     return id;
@@ -150,18 +152,25 @@ export async function saveRegistro(dados: {
 }): Promise<string> {
   const uuid = generateUUID();
   const agora = new Date().toISOString();
-  const userId = 'user_mobile_local'; 
+  const userId = 'user_mobile_local';
 
   if (dados.tipo === 'entrada') {
     const local = await getLocalById(dados.local_id);
-    
+
     db.runSync(
       `INSERT INTO registros (id, user_id, local_id, local_nome, entrada, tipo, created_at) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [uuid, userId, dados.local_id, local?.nome || 'Local', agora, dados.automatico ? 'automatico' : 'manual', agora]
+      [
+        uuid,
+        userId,
+        dados.local_id,
+        local?.nome || 'Local',
+        agora,
+        dados.automatico ? 'automatico' : 'manual',
+        agora,
+      ]
     );
     return uuid;
-
   } else if (dados.tipo === 'saida') {
     // Tenta fechar a sessão aberta
     const sessaoAberta = await getSessaoAberta(dados.local_id);
@@ -178,17 +187,22 @@ export async function saveRegistro(dados: {
   return uuid;
 }
 
-export async function getSessaoAberta(localId: string): Promise<SessaoDB | null> {
+export async function getSessaoAberta(
+  localId: string
+): Promise<SessaoDB | null> {
   const row = db.getFirstSync<SessaoDB>(
     `SELECT * FROM registros WHERE local_id = ? AND saida IS NULL ORDER BY entrada DESC LIMIT 1`,
     [localId]
   );
-  
+
   if (row) {
     return {
       ...row,
       status: 'ativa',
-      duracao_minutos: calculateDurationSafe(row.entrada, new Date().toISOString())
+      duracao_minutos: calculateDurationSafe(
+        row.entrada,
+        new Date().toISOString()
+      ),
     };
   }
   return null;
@@ -198,12 +212,15 @@ export async function getSessaoAtivaGlobal(): Promise<SessaoDB | null> {
   const row = db.getFirstSync<SessaoDB>(
     `SELECT * FROM registros WHERE saida IS NULL ORDER BY entrada DESC LIMIT 1`
   );
-  
+
   if (row) {
     return {
       ...row,
       status: 'ativa',
-      duracao_minutos: calculateDurationSafe(row.entrada, new Date().toISOString())
+      duracao_minutos: calculateDurationSafe(
+        row.entrada,
+        new Date().toISOString()
+      ),
     };
   }
   return null;
@@ -215,33 +232,51 @@ export async function getSessoesHoje(): Promise<SessaoDB[]> {
     `SELECT * FROM registros WHERE entrada LIKE ? ORDER BY entrada DESC`,
     [`${hoje}%`]
   );
-  
-  return rows.map(r => ({
+
+  return rows.map((r) => ({
     ...r,
     status: r.saida ? 'finalizada' : 'ativa',
-    duracao_minutos: calculateDurationSafe(r.entrada, r.saida || new Date().toISOString())
+    duracao_minutos: calculateDurationSafe(
+      r.entrada,
+      r.saida || new Date().toISOString()
+    ),
   }));
 }
 
 export async function getEstatisticasHoje(): Promise<EstatisticasDia> {
   const sessoes = await getSessoesHoje();
-  const finalizadas = sessoes.filter(s => s.saida !== null);
-  const total = finalizadas.reduce((acc, curr) => acc + (curr.duracao_minutos || 0), 0);
+  const finalizadas = sessoes.filter((s) => s.saida !== null);
+  const total = finalizadas.reduce(
+    (acc, curr) => acc + (curr.duracao_minutos || 0),
+    0
+  );
   return { total_minutos: total, total_sessoes: finalizadas.length };
 }
 
 // Mantendo funções legadas para não quebrar outros arquivos
-export async function iniciarSessao(localId: string, sessaoId: string): Promise<void> {}
-export async function finalizarSessao(localId: string, registroId: string): Promise<void> {}
-export async function finalizarSessaoComAjuste(localId: string, registroId: string, minutosAjuste: number): Promise<void> {
-    const sessaoAberta = await getSessaoAberta(localId);
-    if (!sessaoAberta) return;
-    const agora = new Date();
-    const saidaAjustada = new Date(agora.getTime() + (minutosAjuste * 60000)).toISOString();
-    db.runSync(
-      `UPDATE registros SET saida = ?, editado_manualmente = 1, synced_at = NULL WHERE id = ?`,
-      [saidaAjustada, sessaoAberta.id]
-    );
+export async function iniciarSessao(
+  localId: string,
+  sessaoId: string
+): Promise<void> {}
+export async function finalizarSessao(
+  localId: string,
+  registroId: string
+): Promise<void> {}
+export async function finalizarSessaoComAjuste(
+  localId: string,
+  registroId: string,
+  minutosAjuste: number
+): Promise<void> {
+  const sessaoAberta = await getSessaoAberta(localId);
+  if (!sessaoAberta) return;
+  const agora = new Date();
+  const saidaAjustada = new Date(
+    agora.getTime() + minutosAjuste * 60000
+  ).toISOString();
+  db.runSync(
+    `UPDATE registros SET saida = ?, editado_manualmente = 1, synced_at = NULL WHERE id = ?`,
+    [saidaAjustada, sessaoAberta.id]
+  );
 }
 export async function pausarSessao(sessaoId: string): Promise<void> {}
 export async function retomarSessao(sessaoId: string): Promise<void> {}
@@ -261,13 +296,13 @@ function generateUUID(): string {
 // Cálculo ultra-seguro para evitar NaN
 function calculateDurationSafe(start: string, end: string): number {
   if (!start || !end) return 0;
-  
+
   try {
     const s = new Date(start).getTime();
     const e = new Date(end).getTime();
-    
+
     if (isNaN(s) || isNaN(e)) return 0;
-    
+
     const diff = Math.round((e - s) / 60000);
     return diff > 0 ? diff : 0;
   } catch (err) {
@@ -280,16 +315,19 @@ export function formatDuration(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined || isNaN(minutes)) {
     return '0min';
   }
-  
+
   const totalMinutes = Math.floor(Math.max(0, minutes));
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  
+
   if (h === 0) return `${m}min`;
   return `${h}h ${m}min`;
 }
 
-async function getLocalById(id: string): Promise<{nome: string} | null> {
-  const res = db.getFirstSync<{nome: string}>(`SELECT nome FROM locais WHERE id = ?`, [id]);
+async function getLocalById(id: string): Promise<{ nome: string } | null> {
+  const res = db.getFirstSync<{ nome: string }>(
+    `SELECT nome FROM locais WHERE id = ?`,
+    [id]
+  );
   return res;
 }

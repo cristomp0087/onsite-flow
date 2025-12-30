@@ -49,17 +49,20 @@ src/
 ## ✅ Features
 
 ### Dashboard
+
 - [x] Cards de estatísticas (total horas, sessões, média)
 - [x] Gráfico de horas por dia (últimos 14 dias)
 - [x] Atividade recente
 
 ### Registros
+
 - [x] Tabela paginada
 - [x] Filtros (período, local, busca)
 - [x] Export Excel (.xlsx)
 - [x] Export CSV
 
 ### Em Desenvolvimento
+
 - [ ] Página de Locais (visualizar/editar)
 - [ ] Página de Relatórios (PDF)
 - [ ] Configurações de usuário
@@ -67,6 +70,7 @@ src/
 ## 🔗 Conexão com Mobile
 
 Este app usa o **mesmo Supabase** do mobile:
+
 - Mesmo banco de dados
 - Mesma autenticação
 - Dados sincronizados em tempo real

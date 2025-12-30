@@ -23,12 +23,12 @@
 
 **Metadados** são "dados sobre dados". No contexto do OnSite Flow:
 
-| Dado do Usuário (PII) | Metadado Derivado |
-|----------------------|-------------------|
-| João Silva trabalhou na Obra X das 8h às 17h | "Um usuário trabalhou 9 horas" |
-| Coordenadas -23.5505, -46.6333 (São Paulo) | "Região: Grande São Paulo" |
-| Email: joao@email.com | "Domínio do email: email.com" |
-| 15 registros em dezembro | "Média de registros por usuário em dezembro" |
+| Dado do Usuário (PII)                        | Metadado Derivado                            |
+| -------------------------------------------- | -------------------------------------------- |
+| João Silva trabalhou na Obra X das 8h às 17h | "Um usuário trabalhou 9 horas"               |
+| Coordenadas -23.5505, -46.6333 (São Paulo)   | "Região: Grande São Paulo"                   |
+| Email: joao@email.com                        | "Domínio do email: email.com"                |
+| 15 registros em dezembro                     | "Média de registros por usuário em dezembro" |
 
 **A diferença crucial:** Metadados agregados e anonimizados não identificam indivíduos.
 
@@ -287,7 +287,14 @@ import { supabase } from '@/lib/supabase';
 const sessionId = crypto.randomUUID();
 
 // NUNCA incluir esses campos nos eventos
-const PII_FIELDS = ['email', 'nome', 'user_id', 'latitude', 'longitude', 'local_nome'];
+const PII_FIELDS = [
+  'email',
+  'nome',
+  'user_id',
+  'latitude',
+  'longitude',
+  'local_nome',
+];
 
 interface AnalyticsEvent {
   eventName: string;
@@ -300,22 +307,27 @@ const eventQueue: AnalyticsEvent[] = [];
 /**
  * Remove qualquer dado pessoal identificável
  */
-function sanitizeProperties(props: Record<string, unknown>): Record<string, unknown> {
+function sanitizeProperties(
+  props: Record<string, unknown>
+): Record<string, unknown> {
   const sanitized = { ...props };
-  
+
   for (const field of PII_FIELDS) {
     if (field in sanitized) {
       delete sanitized[field];
     }
   }
-  
+
   // Anonimiza coordenadas para região
   if ('lat' in sanitized && 'lng' in sanitized) {
-    sanitized.region = getRegionFromCoords(sanitized.lat as number, sanitized.lng as number);
+    sanitized.region = getRegionFromCoords(
+      sanitized.lat as number,
+      sanitized.lng as number
+    );
     delete sanitized.lat;
     delete sanitized.lng;
   }
-  
+
   return sanitized;
 }
 
@@ -334,9 +346,12 @@ function getRegionFromCoords(lat: number, lng: number): string {
 /**
  * Registra evento de analytics
  */
-export function trackEvent(eventName: string, properties?: Record<string, unknown>) {
+export function trackEvent(
+  eventName: string,
+  properties?: Record<string, unknown>
+) {
   const sanitizedProps = properties ? sanitizeProperties(properties) : {};
-  
+
   eventQueue.push({
     eventName,
     properties: {
@@ -348,7 +363,7 @@ export function trackEvent(eventName: string, properties?: Record<string, unknow
       osVersion: Platform.Version,
     },
   });
-  
+
   // Envia em batch a cada 10 eventos ou 60 segundos
   if (eventQueue.length >= 10) {
     flushEvents();
@@ -360,13 +375,13 @@ export function trackEvent(eventName: string, properties?: Record<string, unknow
  */
 async function flushEvents() {
   if (eventQueue.length === 0) return;
-  
+
   const eventsToSend = [...eventQueue];
   eventQueue.length = 0;
-  
+
   try {
     await supabase.from('analytics_events').insert(
-      eventsToSend.map(e => ({
+      eventsToSend.map((e) => ({
         event_name: e.eventName,
         properties: e.properties,
         session_id: sessionId,
@@ -394,21 +409,21 @@ AppState.addEventListener('change', (state) => {
 trackEvent('screen_view', { screen: 'home' });
 
 // ✅ CORRETO - Ação sem PII
-trackEvent('geofence_triggered', { 
-  action: 'check_in', 
+trackEvent('geofence_triggered', {
+  action: 'check_in',
   trigger: 'automatic',
   // NÃO inclui local_nome ou coordenadas
 });
 
 // ✅ CORRETO - Erro sem stack trace com dados do usuário
-trackEvent('error', { 
+trackEvent('error', {
   type: 'sync_failed',
   code: 'NETWORK_ERROR',
   // NÃO inclui mensagem que pode ter email/nome
 });
 
 // ❌ ERRADO - Nunca fazer isso
-// trackEvent('user_action', { 
+// trackEvent('user_action', {
 //   userId: 'abc123',           // ❌ PII
 //   email: 'joao@email.com',    // ❌ PII
 //   location: { lat: -23.5, lng: -46.6 }, // ❌ PII

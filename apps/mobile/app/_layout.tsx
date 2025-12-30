@@ -15,14 +15,14 @@ export default function RootLayout() {
   const { initialize: initRegistros } = useRegistroStore();
   const { initialize: initWorkSession } = useWorkSessionStore();
   const { initialize: initSync } = useSyncStore();
-  
+
   useEffect(() => {
     logger.info('auth', 'App starting...');
     initAuth();
     initRegistros();
     initWorkSession();
   }, []);
-  
+
   // Inicializar sync quando usuário logar
   useEffect(() => {
     if (user) {
@@ -30,7 +30,7 @@ export default function RootLayout() {
       initSync();
     }
   }, [user]);
-  
+
   if (isLoading) {
     return (
       <View style={styles.loading}>
@@ -38,7 +38,7 @@ export default function RootLayout() {
       </View>
     );
   }
-  
+
   return (
     <View style={{ flex: 1 }}>
       <StatusBar style="dark" />

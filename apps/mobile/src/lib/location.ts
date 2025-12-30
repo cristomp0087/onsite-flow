@@ -34,11 +34,14 @@ export interface GeofenceRegion {
 export async function requestForegroundPermission(): Promise<boolean> {
   try {
     logger.info('gps', 'Requesting foreground location permission');
-    
+
     const { status } = await Location.requestForegroundPermissionsAsync();
     const granted = status === 'granted';
-    
-    logger.info('gps', `Foreground permission: ${granted ? 'granted' : 'denied'}`);
+
+    logger.info(
+      'gps',
+      `Foreground permission: ${granted ? 'granted' : 'denied'}`
+    );
     return granted;
   } catch (error) {
     logger.error('gps', 'Error requesting foreground permission', { error });
@@ -49,11 +52,14 @@ export async function requestForegroundPermission(): Promise<boolean> {
 export async function requestBackgroundPermission(): Promise<boolean> {
   try {
     logger.info('gps', 'Requesting background location permission');
-    
+
     const { status } = await Location.requestBackgroundPermissionsAsync();
     const granted = status === 'granted';
-    
-    logger.info('gps', `Background permission: ${granted ? 'granted' : 'denied'}`);
+
+    logger.info(
+      'gps',
+      `Background permission: ${granted ? 'granted' : 'denied'}`
+    );
     return granted;
   } catch (error) {
     logger.error('gps', 'Error requesting background permission', { error });
@@ -67,7 +73,7 @@ export async function checkPermissions(): Promise<{
 }> {
   const foreground = await Location.getForegroundPermissionsAsync();
   const background = await Location.getBackgroundPermissionsAsync();
-  
+
   return {
     foreground: foreground.status === 'granted',
     background: background.status === 'granted',
@@ -85,13 +91,13 @@ export async function getCurrentLocation(): Promise<LocationResult | null> {
       logger.warn('gps', 'No permission for location');
       return null;
     }
-    
+
     logger.debug('gps', 'Getting current location...');
-    
+
     const location = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.High,
     });
-    
+
     const result: LocationResult = {
       coords: {
         latitude: location.coords.latitude,
@@ -100,13 +106,13 @@ export async function getCurrentLocation(): Promise<LocationResult | null> {
       accuracy: location.coords.accuracy,
       timestamp: location.timestamp,
     };
-    
+
     logger.info('gps', 'Location obtained', {
       lat: result.coords.latitude.toFixed(6),
       lng: result.coords.longitude.toFixed(6),
       accuracy: result.accuracy?.toFixed(1) + 'm',
     });
-    
+
     return result;
   } catch (error) {
     logger.error('gps', 'Error getting location', { error });
@@ -131,12 +137,12 @@ export async function startWatchingLocation(
   try {
     const hasPermission = await requestForegroundPermission();
     if (!hasPermission) return false;
-    
+
     // Para qualquer watch anterior
     await stopWatchingLocation();
-    
+
     logger.info('gps', 'Starting location watch');
-    
+
     locationSubscription = await Location.watchPositionAsync(
       {
         accuracy: options?.accuracy ?? Location.Accuracy.Balanced,
@@ -152,16 +158,16 @@ export async function startWatchingLocation(
           accuracy: location.coords.accuracy,
           timestamp: location.timestamp,
         };
-        
+
         logger.debug('gps', 'Location update', {
           lat: result.coords.latitude.toFixed(6),
           lng: result.coords.longitude.toFixed(6),
         });
-        
+
         onUpdate(result);
       }
     );
-    
+
     return true;
   } catch (error) {
     logger.error('gps', 'Error starting location watch', { error });
@@ -181,22 +187,30 @@ export async function stopWatchingLocation(): Promise<void> {
 // Geofencing
 // ============================================
 
-export async function startGeofencing(regions: GeofenceRegion[]): Promise<boolean> {
+export async function startGeofencing(
+  regions: GeofenceRegion[]
+): Promise<boolean> {
   try {
     const hasBackground = await requestBackgroundPermission();
     if (!hasBackground) {
       logger.warn('geofence', 'No background permission for geofencing');
       return false;
     }
-    
-    logger.info('geofence', `Starting geofencing for ${regions.length} regions`);
-    
-    await Location.startGeofencingAsync(GEOFENCE_TASK_NAME, regions.map(r => ({
-      ...r,
-      notifyOnEnter: r.notifyOnEnter ?? true,
-      notifyOnExit: r.notifyOnExit ?? true,
-    })));
-    
+
+    logger.info(
+      'geofence',
+      `Starting geofencing for ${regions.length} regions`
+    );
+
+    await Location.startGeofencingAsync(
+      GEOFENCE_TASK_NAME,
+      regions.map((r) => ({
+        ...r,
+        notifyOnEnter: r.notifyOnEnter ?? true,
+        notifyOnExit: r.notifyOnExit ?? true,
+      }))
+    );
+
     logger.info('geofence', 'Geofencing started successfully');
     return true;
   } catch (error) {
@@ -207,7 +221,8 @@ export async function startGeofencing(regions: GeofenceRegion[]): Promise<boolea
 
 export async function stopGeofencing(): Promise<void> {
   try {
-    const isRunning = await Location.hasStartedGeofencingAsync(GEOFENCE_TASK_NAME);
+    const isRunning =
+      await Location.hasStartedGeofencingAsync(GEOFENCE_TASK_NAME);
     if (isRunning) {
       logger.info('geofence', 'Stopping geofencing');
       await Location.stopGeofencingAsync(GEOFENCE_TASK_NAME);
@@ -228,9 +243,9 @@ export async function startBackgroundLocation(): Promise<boolean> {
       logger.warn('gps', 'No background permission');
       return false;
     }
-    
+
     logger.info('gps', 'Starting background location updates');
-    
+
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.Balanced,
       distanceInterval: 50, // metros - só atualiza se mover 50m
@@ -243,7 +258,7 @@ export async function startBackgroundLocation(): Promise<boolean> {
         notificationColor: '#3B82F6',
       },
     });
-    
+
     logger.info('gps', 'Background location started');
     return true;
   } catch (error) {
@@ -254,7 +269,8 @@ export async function startBackgroundLocation(): Promise<boolean> {
 
 export async function stopBackgroundLocation(): Promise<void> {
   try {
-    const isRunning = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
+    const isRunning =
+      await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);
     if (isRunning) {
       logger.info('gps', 'Stopping background location');
       await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);

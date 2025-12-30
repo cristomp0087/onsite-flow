@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
@@ -20,27 +20,27 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signIn } = useAuthStore();
-  
+
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Erro', 'Preencha todos os campos');
       return;
     }
-    
+
     setLoading(true);
     const { error } = await signIn(email, password);
     setLoading(false);
-    
+
     if (error) {
       Alert.alert('Erro', error);
     } else {
       router.replace('/(tabs)');
     }
   };
-  
+
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.content}
       >
@@ -49,7 +49,7 @@ export default function LoginScreen() {
           <Text style={styles.title}>OnSite Flow</Text>
           <Text style={styles.subtitle}>Entre para continuar</Text>
         </View>
-        
+
         <View style={styles.form}>
           <Input
             label="Email"
@@ -59,7 +59,7 @@ export default function LoginScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          
+
           <Input
             label="Senha"
             placeholder="••••••••"
@@ -67,7 +67,7 @@ export default function LoginScreen() {
             onChangeText={setPassword}
             secureTextEntry
           />
-          
+
           <Button
             title="Entrar"
             onPress={handleLogin}
@@ -75,7 +75,7 @@ export default function LoginScreen() {
             style={{ marginTop: 8 }}
           />
         </View>
-        
+
         <View style={styles.footer}>
           <Text style={styles.footerText}>Não tem conta? </Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/register')}>

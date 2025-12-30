@@ -1,11 +1,16 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import { logger } from './logger';
-import { LOCATION_TASK_NAME, GEOFENCE_TASK_NAME, isInsideGeofence } from './location';
+import {
+  LOCATION_TASK_NAME,
+  GEOFENCE_TASK_NAME,
+  isInsideGeofence,
+} from './location';
 
 // Armazena callbacks para notificações
 let onGeofenceEvent: ((event: GeofenceEvent) => void) | null = null;
-let onLocationUpdate: ((location: Location.LocationObject) => void) | null = null;
+let onLocationUpdate: ((location: Location.LocationObject) => void) | null =
+  null;
 
 export interface GeofenceEvent {
   type: 'enter' | 'exit';
@@ -20,7 +25,9 @@ export function setGeofenceCallback(callback: (event: GeofenceEvent) => void) {
   onGeofenceEvent = callback;
 }
 
-export function setLocationCallback(callback: (location: Location.LocationObject) => void) {
+export function setLocationCallback(
+  callback: (location: Location.LocationObject) => void
+) {
   onLocationUpdate = callback;
 }
 
@@ -45,10 +52,14 @@ TaskManager.defineTask(GEOFENCE_TASK_NAME, ({ data, error }) => {
       timestamp: Date.now(),
     };
 
-    logger.info('geofence', `Geofence ${event.type}: ${event.regionIdentifier}`, {
-      type: event.type,
-      region: event.regionIdentifier,
-    });
+    logger.info(
+      'geofence',
+      `Geofence ${event.type}: ${event.regionIdentifier}`,
+      {
+        type: event.type,
+        region: event.regionIdentifier,
+      }
+    );
 
     // Chama callback se registrado
     if (onGeofenceEvent) {
@@ -62,16 +73,18 @@ TaskManager.defineTask(GEOFENCE_TASK_NAME, ({ data, error }) => {
 // ============================================
 TaskManager.defineTask(LOCATION_TASK_NAME, ({ data, error }) => {
   if (error) {
-    logger.error('gps', 'Background location task error', { error: error.message });
+    logger.error('gps', 'Background location task error', {
+      error: error.message,
+    });
     return;
   }
 
   if (data) {
     const { locations } = data as { locations: Location.LocationObject[] };
-    
+
     if (locations && locations.length > 0) {
       const location = locations[0];
-      
+
       logger.debug('gps', 'Background location update', {
         lat: location.coords.latitude.toFixed(6),
         lng: location.coords.longitude.toFixed(6),

@@ -5,9 +5,9 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSessoesStore } from '@/stores/sessoesStore';
 import { formatarData, formatarHora, formatarDuracao } from '@/lib/utils';
 import { exportarParaExcel } from '@/lib/export';
-import { 
-  Download, 
-  Filter, 
+import {
+  Download,
+  Filter,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -18,20 +18,20 @@ const ITEMS_PER_PAGE = 15;
 
 export default function RegistrosPage() {
   const { user } = useAuthStore();
-  const { 
-    sessoes, 
+  const {
+    sessoes,
     locais,
     filtros,
-    isLoading, 
-    fetchSessoes, 
+    isLoading,
+    fetchSessoes,
     fetchLocais,
     setFiltros,
     setPresetPeriodo,
   } = useSessoesStore();
-  
+
   const [pagina, setPagina] = useState(1);
   const [busca, setBusca] = useState('');
-  
+
   useEffect(() => {
     if (user) {
       setPresetPeriodo('mes');
@@ -39,9 +39,9 @@ export default function RegistrosPage() {
       fetchLocais(user.id);
     }
   }, [user, fetchSessoes, fetchLocais, setPresetPeriodo]);
-  
+
   // Filtrar por busca
-  const sessoesFiltradas = sessoes.filter(s => {
+  const sessoesFiltradas = sessoes.filter((s) => {
     if (!busca) return true;
     const termo = busca.toLowerCase();
     return (
@@ -49,28 +49,30 @@ export default function RegistrosPage() {
       formatarData(s.inicio).includes(termo)
     );
   });
-  
+
   // Paginação
   const totalPaginas = Math.ceil(sessoesFiltradas.length / ITEMS_PER_PAGE);
   const sessoesExibidas = sessoesFiltradas.slice(
     (pagina - 1) * ITEMS_PER_PAGE,
     pagina * ITEMS_PER_PAGE
   );
-  
+
   const handleExport = (formato: 'xlsx' | 'csv') => {
     exportarParaExcel({ sessoes: sessoesFiltradas, formato });
   };
-  
+
   const handleFiltroLocal = (localId: string) => {
     setFiltros({ localId: localId || null });
     if (user) fetchSessoes(user.id);
   };
-  
-  const handleFiltroPeriodo = (preset: 'hoje' | 'semana' | 'mes' | '30dias') => {
+
+  const handleFiltroPeriodo = (
+    preset: 'hoje' | 'semana' | 'mes' | '30dias'
+  ) => {
     setPresetPeriodo(preset);
     if (user) fetchSessoes(user.id);
   };
-  
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -78,10 +80,12 @@ export default function RegistrosPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Registros</h1>
           <p className="text-gray-500 mt-1">
-            {sessoesFiltradas.length} registro{sessoesFiltradas.length !== 1 ? 's' : ''} encontrado{sessoesFiltradas.length !== 1 ? 's' : ''}
+            {sessoesFiltradas.length} registro
+            {sessoesFiltradas.length !== 1 ? 's' : ''} encontrado
+            {sessoesFiltradas.length !== 1 ? 's' : ''}
           </p>
         </div>
-        
+
         {/* Export Buttons */}
         <div className="flex gap-2">
           <button
@@ -100,7 +104,7 @@ export default function RegistrosPage() {
           </button>
         </div>
       </div>
-      
+
       {/* Filters */}
       <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
         <div className="flex flex-wrap gap-4">
@@ -115,7 +119,7 @@ export default function RegistrosPage() {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
             />
           </div>
-          
+
           {/* Período */}
           <div className="flex gap-2">
             {['hoje', 'semana', 'mes', '30dias'].map((preset) => (
@@ -131,7 +135,7 @@ export default function RegistrosPage() {
               </button>
             ))}
           </div>
-          
+
           {/* Local */}
           <select
             value={filtros.localId || ''}
@@ -147,18 +151,30 @@ export default function RegistrosPage() {
           </select>
         </div>
       </div>
-      
+
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Data</th>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Local</th>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Entrada</th>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Saída</th>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Duração</th>
-              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">Status</th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Data
+              </th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Local
+              </th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Entrada
+              </th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Saída
+              </th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Duração
+              </th>
+              <th className="text-left px-6 py-4 text-sm font-semibold text-gray-600">
+                Status
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -193,13 +209,15 @@ export default function RegistrosPage() {
                     {formatarDuracao(sessao.duracao_minutos)}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      sessao.status === 'finalizada' 
-                        ? 'bg-green-100 text-green-700'
-                        : sessao.status === 'ativa'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-yellow-100 text-yellow-700'
-                    }`}>
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        sessao.status === 'finalizada'
+                          ? 'bg-green-100 text-green-700'
+                          : sessao.status === 'ativa'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-yellow-100 text-yellow-700'
+                      }`}
+                    >
                       {sessao.status === 'finalizada' && 'Finalizada'}
                       {sessao.status === 'ativa' && 'Ativa'}
                       {sessao.status === 'pausada' && 'Pausada'}
@@ -210,23 +228,25 @@ export default function RegistrosPage() {
             )}
           </tbody>
         </table>
-        
+
         {/* Pagination */}
         {totalPaginas > 1 && (
           <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
             <p className="text-sm text-gray-500">
-              Mostrando {(pagina - 1) * ITEMS_PER_PAGE + 1} a {Math.min(pagina * ITEMS_PER_PAGE, sessoesFiltradas.length)} de {sessoesFiltradas.length}
+              Mostrando {(pagina - 1) * ITEMS_PER_PAGE + 1} a{' '}
+              {Math.min(pagina * ITEMS_PER_PAGE, sessoesFiltradas.length)} de{' '}
+              {sessoesFiltradas.length}
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setPagina(p => Math.max(1, p - 1))}
+                onClick={() => setPagina((p) => Math.max(1, p - 1))}
                 disabled={pagina === 1}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <button
-                onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))}
+                onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
                 disabled={pagina === totalPaginas}
                 className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >

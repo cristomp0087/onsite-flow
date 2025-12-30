@@ -60,7 +60,10 @@ export function formatDuration(minutes: number): string {
 /**
  * Calcula duração entre duas datas em minutos
  */
-export function calculateDuration(start: Date | string, end: Date | string): number {
+export function calculateDuration(
+  start: Date | string,
+  end: Date | string
+): number {
   const startDate = typeof start === 'string' ? new Date(start) : start;
   const endDate = typeof end === 'string' ? new Date(end) : end;
 

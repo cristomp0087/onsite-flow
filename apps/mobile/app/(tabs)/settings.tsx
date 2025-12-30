@@ -29,9 +29,9 @@ export default function SettingsScreen() {
     setAutoActionTimeout,
     resetToDefaults,
   } = useSettingsStore();
-  
+
   const { user, signOut } = useAuthStore();
-  
+
   const handleResetDefaults = () => {
     Alert.alert(
       'Restaurar Padrões',
@@ -42,18 +42,14 @@ export default function SettingsScreen() {
       ]
     );
   };
-  
+
   const handleSignOut = () => {
-    Alert.alert(
-      'Sair da Conta',
-      'Tem certeza que deseja sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', style: 'destructive', onPress: signOut },
-      ]
-    );
+    Alert.alert('Sair da Conta', 'Tem certeza que deseja sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: signOut },
+    ]);
   };
-  
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView style={styles.content}>
@@ -61,25 +57,30 @@ export default function SettingsScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>⚙️ Configurações</Text>
         </View>
-        
+
         {/* Conta */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>👤 Conta</Text>
           <View style={styles.card}>
-            <Text style={styles.emailText}>{user?.email || 'Não conectado'}</Text>
-            <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Text style={styles.emailText}>
+              {user?.email || 'Não conectado'}
+            </Text>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+            >
               <Text style={styles.signOutText}>Sair da conta</Text>
             </TouchableOpacity>
           </View>
         </View>
-        
+
         {/* Popup de Saída */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>🚪 Popup de Saída</Text>
           <Text style={styles.sectionDesc}>
             Quando você sai de uma fence, escolha os botões de ajuste de tempo
           </Text>
-          
+
           <View style={styles.card}>
             <Text style={styles.optionLabel}>Primeiro botão "Há X min"</Text>
             <View style={styles.optionsRow}>
@@ -103,8 +104,10 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            
-            <Text style={[styles.optionLabel, { marginTop: 16 }]}>Segundo botão "Há X min"</Text>
+
+            <Text style={[styles.optionLabel, { marginTop: 16 }]}>
+              Segundo botão "Há X min"
+            </Text>
             <View style={styles.optionsRow}>
               {EXIT_TIME_OPTIONS.map((opt) => (
                 <TouchableOpacity
@@ -128,14 +131,14 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
-        
+
         {/* Popup de Entrada */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>📍 Popup de Entrada</Text>
           <Text style={styles.sectionDesc}>
             Quando você chega em uma fence, escolha o tempo de atraso
           </Text>
-          
+
           <View style={styles.card}>
             <Text style={styles.optionLabel}>Botão "Em X min"</Text>
             <View style={styles.optionsRow}>
@@ -161,14 +164,14 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
-        
+
         {/* Auto-ação */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>⏱️ Tempo Automático</Text>
           <Text style={styles.sectionDesc}>
             Tempo de espera antes da ação automática (em segundos)
           </Text>
-          
+
           <View style={styles.card}>
             <Text style={styles.optionLabel}>Countdown do popup</Text>
             <View style={styles.optionsRow}>
@@ -184,7 +187,8 @@ export default function SettingsScreen() {
                   <Text
                     style={[
                       styles.optionButtonText,
-                      autoActionTimeout === opt && styles.optionButtonTextActive,
+                      autoActionTimeout === opt &&
+                        styles.optionButtonTextActive,
                     ]}
                   >
                     {opt}s
@@ -194,14 +198,19 @@ export default function SettingsScreen() {
             </View>
           </View>
         </View>
-        
+
         {/* Restaurar Padrões */}
         <View style={styles.section}>
-          <TouchableOpacity style={styles.resetButton} onPress={handleResetDefaults}>
-            <Text style={styles.resetButtonText}>🔄 Restaurar Configurações Padrão</Text>
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={handleResetDefaults}
+          >
+            <Text style={styles.resetButtonText}>
+              🔄 Restaurar Configurações Padrão
+            </Text>
           </TouchableOpacity>
         </View>
-        
+
         {/* Versão */}
         <View style={styles.footer}>
           <Text style={styles.versionText}>OnSite Flow v1.0.0</Text>

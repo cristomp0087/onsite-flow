@@ -1,8 +1,8 @@
 /**
  * Tipos do Banco de Dados - OnSite Flow Web
- * 
+ *
  * Alinhado com estrutura do Supabase
- * 
+ *
  * Localização: apps/web/src/types/database.ts
  */
 
@@ -142,17 +142,17 @@ export type Sessao = Registro & {
 export function registroToSessao(registro: Registro): Sessao {
   const entrada = new Date(registro.entrada);
   const saida = registro.saida ? new Date(registro.saida) : null;
-  
+
   let duracao_minutos: number | null = null;
   if (saida) {
     duracao_minutos = Math.round((saida.getTime() - entrada.getTime()) / 60000);
   }
-  
+
   let status: 'ativa' | 'pausada' | 'finalizada' = 'ativa';
   if (registro.saida) {
     status = 'finalizada';
   }
-  
+
   return {
     ...registro,
     inicio: registro.entrada,

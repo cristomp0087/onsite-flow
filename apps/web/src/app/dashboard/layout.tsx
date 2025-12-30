@@ -13,17 +13,17 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const { user, isLoading, isInitialized, initialize } = useAuthStore();
-  
+
   useEffect(() => {
     initialize();
   }, [initialize]);
-  
+
   useEffect(() => {
     if (isInitialized && !user) {
       router.push('/');
     }
   }, [isInitialized, user, router]);
-  
+
   if (!isInitialized || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -31,17 +31,15 @@ export default function DashboardLayout({
       </div>
     );
   }
-  
+
   if (!user) {
     return null;
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <main className="ml-64 p-8">
-        {children}
-      </main>
+      <main className="ml-64 p-8">{children}</main>
     </div>
   );
 }

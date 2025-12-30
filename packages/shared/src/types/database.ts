@@ -118,7 +118,9 @@ export type LocalInsert = Omit<Local, 'id' | 'created_at' | 'updated_at'>;
 export type LocalUpdate = Partial<Omit<Local, 'id' | 'user_id' | 'created_at'>>;
 
 export type RegistroInsert = Omit<Registro, 'id' | 'created_at'>;
-export type RegistroUpdate = Partial<Omit<Registro, 'id' | 'user_id' | 'created_at'>>;
+export type RegistroUpdate = Partial<
+  Omit<Registro, 'id' | 'user_id' | 'created_at'>
+>;
 
 export type AppLogInsert = Omit<AppLog, 'id' | 'created_at'>;
 

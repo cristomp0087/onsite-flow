@@ -17,7 +17,7 @@ export async function sha256(message: string): Promise<string> {
       const msgBuffer = new TextEncoder().encode(message);
       const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
     }
   }
 
@@ -26,7 +26,7 @@ export async function sha256(message: string): Promise<string> {
   let hash = 0;
   for (let i = 0; i < message.length; i++) {
     const char = message.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16).padStart(16, '0');
@@ -41,7 +41,12 @@ export async function generateRecordHash(record: {
   saida: string | null;
   local_nome: string;
 }): Promise<string> {
-  const data = [record.id, record.entrada, record.saida ?? 'null', record.local_nome].join('|');
+  const data = [
+    record.id,
+    record.entrada,
+    record.saida ?? 'null',
+    record.local_nome,
+  ].join('|');
   const salt = 'onsite_flow_v1';
   const fullHash = await sha256(data + salt);
   return fullHash.substring(0, 16);
@@ -50,15 +55,13 @@ export async function generateRecordHash(record: {
 /**
  * Verifica se um registro mantém sua integridade
  */
-export async function verifyRecordIntegrity(
-  record: {
-    id: string;
-    entrada: string;
-    saida: string | null;
-    local_nome: string;
-    hash_integridade: string | null;
-  }
-): Promise<boolean> {
+export async function verifyRecordIntegrity(record: {
+  id: string;
+  entrada: string;
+  saida: string | null;
+  local_nome: string;
+  hash_integridade: string | null;
+}): Promise<boolean> {
   if (!record.hash_integridade) {
     return false;
   }
@@ -69,7 +72,9 @@ export async function verifyRecordIntegrity(
 /**
  * Gera hash para um relatório completo
  */
-export async function generateReportHash(reportContent: string): Promise<string> {
+export async function generateReportHash(
+  reportContent: string
+): Promise<string> {
   const salt = 'onsite_report_v1';
   const fullHash = await sha256(reportContent + salt);
   return fullHash.substring(0, 32);
@@ -79,7 +84,7 @@ export async function generateReportHash(reportContent: string): Promise<string>
  * Gera um ID único (UUID v4 simplificado)
  */
 export function generateId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);

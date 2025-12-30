@@ -3,17 +3,18 @@ import { useLocationStore } from '../stores/locationStore';
 
 export function useLocation() {
   const store = useLocationStore();
-  
+
   useEffect(() => {
     store.initialize();
   }, []);
-  
+
   return store;
 }
 
 export function useCurrentLocation() {
-  const { currentLocation, accuracy, lastUpdate, refreshLocation } = useLocationStore();
-  
+  const { currentLocation, accuracy, lastUpdate, refreshLocation } =
+    useLocationStore();
+
   return {
     location: currentLocation,
     accuracy,
@@ -23,9 +24,9 @@ export function useCurrentLocation() {
 }
 
 export function useGeofences() {
-  const { 
-    locais, 
-    activeGeofence, 
+  const {
+    locais,
+    activeGeofence,
     isGeofencingActive,
     addLocal,
     removeLocal,
@@ -33,9 +34,9 @@ export function useGeofences() {
     startGeofenceMonitoring,
     stopGeofenceMonitoring,
   } = useLocationStore();
-  
-  const activeLocal = locais.find(l => l.id === activeGeofence);
-  
+
+  const activeLocal = locais.find((l) => l.id === activeGeofence);
+
   return {
     locais,
     activeLocal,

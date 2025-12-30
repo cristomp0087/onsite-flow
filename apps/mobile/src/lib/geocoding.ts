@@ -21,13 +21,13 @@ export async function searchAddress(query: string): Promise<GeocodingResult[]> {
         },
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     return data.map((item: any) => ({
       latitude: parseFloat(item.lat),
       longitude: parseFloat(item.lon),
@@ -36,12 +36,17 @@ export async function searchAddress(query: string): Promise<GeocodingResult[]> {
       country: item.address?.country,
     }));
   } catch (error) {
-    logger.error('geocoding', 'Error searching address', { error: String(error) });
+    logger.error('geocoding', 'Error searching address', {
+      error: String(error),
+    });
     return [];
   }
 }
 
-export async function reverseGeocode(latitude: number, longitude: number): Promise<string | null> {
+export async function reverseGeocode(
+  latitude: number,
+  longitude: number
+): Promise<string | null> {
   try {
     const response = await fetch(
       `${NOMINATIM_URL}/reverse?lat=${latitude}&lon=${longitude}&format=json`,
@@ -51,15 +56,17 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
         },
       }
     );
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
+
     const data = await response.json();
     return data.display_name || null;
   } catch (error) {
-    logger.error('geocoding', 'Error reverse geocoding', { error: String(error) });
+    logger.error('geocoding', 'Error reverse geocoding', {
+      error: String(error),
+    });
     return null;
   }
 }
